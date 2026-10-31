@@ -203,7 +203,7 @@
  
 --- a/ros2_cuda_ipc_core/include/ros2_cuda_ipc_core/detail/read_handle_factory.hpp
 +++ b/ros2_cuda_ipc_core/include/ros2_cuda_ipc_core/detail/read_handle_factory.hpp
-@@ -20,7 +20,8 @@
+@@ -20,11 +20,16 @@
    static std::unique_ptr<MappedPublication> make_publication(
        std::shared_ptr<const backend::ImportedResources> resource,
        std::unique_ptr<buffer_metadata::BufferRef> buffer_ref,
@@ -211,8 +211,19 @@
 +      std::size_t byte_size, int device_id,
 +                    std::shared_ptr<void> admission = {});
  
-   /// Enqueue the producer wait and commit the publication into a ReadHandle.
-   /// The publication retains ownership if any operation before the wait
+-  /// Enqueue the producer wait and commit the publication into a ReadHandle.
+-  /// The publication retains ownership if any operation before the wait
+-  /// succeeds, or if enqueueing the wait fails.
++  /**
++   * @brief Enqueue the producer wait and commit ownership into a ReadHandle.
++   * @param publication Keeps ownership on bind failure if rollback succeeds;
++   *   uncertain cleanup instead transfers it into process-lifetime quarantine.
++   * @param consumer_stream Stream on which to wait for producer completion.
++   * @return A bound handle on success, or std::nullopt on bind failure.
++   */
+   static std::optional<ReadHandle> make_bound(MappedPublication& publication,
+                                               CUstream consumer_stream);
+ };
 --- a/ros2_cuda_ipc_core/include/ros2_cuda_ipc_core/publisher/gpu_buffer_manager.hpp
 +++ b/ros2_cuda_ipc_core/include/ros2_cuda_ipc_core/publisher/gpu_buffer_manager.hpp
 @@ -15,12 +15,12 @@
@@ -1131,7 +1142,14 @@
  }
  
  bool release_imported_resources(const ImportedResources& imported) noexcept {
-@@ -249,34 +307,24 @@
+@@ -244,39 +302,29 @@
+   if (!guard_result) {
+     RCUTILS_LOG_ERROR_NAMED(
+         "ros2_cuda_ipc_core.backend.vmm_fd",
+-        "Failed to activate CUDA context for imported resource cleanup: %s",
+-        guard_result.error().to_string().c_str());
++        "Failed to activate CUDA context for imported resource cleanup code=%d",
++        guard_result.error().code());
      return false;
    }
    auto guard = std::move(guard_result).value();
@@ -1227,6 +1245,21 @@
  }
  
  std::shared_ptr<BufferMetadata> BufferMetadata::attach(
+@@ -113,12 +125,13 @@
+   }
+   void* addr =
+       mmap(nullptr, kMetadataSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
++  const int mapping_errno = errno;
+   close(fd);
+   if (addr == MAP_FAILED) {
+     RCUTILS_LOG_WARN_NAMED(
+         "ros2_cuda_ipc_core.buffer_metadata",
+         "buffer_metadata:attach mmap failed name=%s errno=%d", shm_name.c_str(),
+-        errno);
++        mapping_errno);
+     return nullptr;
+   }
+   return BufferMetadata::make_mapping(shm_name, addr, kMetadataSize);
 --- a/ros2_cuda_ipc_core/src/buffer_metadata/buffer_ref.cpp
 +++ b/ros2_cuda_ipc_core/src/buffer_metadata/buffer_ref.cpp
 @@ -13,6 +13,7 @@
@@ -2385,7 +2418,7 @@
  #include "ros2_cuda_ipc_core/transport/memory_types.hpp"
  
  namespace ros2_cuda_ipc_core::subscriber {
-@@ -28,16 +30,20 @@
+@@ -28,16 +30,23 @@
  }
  
  std::unique_ptr<detail::MappedPublication> map_descriptor(
@@ -2397,7 +2430,11 @@
 +      msg.byte_size > epoch->max_bytes ||
 +      msg.byte_size > std::numeric_limits<std::size_t>::max()) {
      RCUTILS_LOG_WARN_NAMED("ros2_cuda_ipc_core.subscriber.buffer_mapper",
-                            "BufferCore publisher_pid is zero");
+-                           "BufferCore publisher_pid is zero");
++                           "BufferCore invalid publisher or byte size pid=%u bytes=%llu max=%llu",
++                           msg.publisher_pid,
++                           static_cast<unsigned long long>(msg.byte_size),
++                           static_cast<unsigned long long>(epoch->max_bytes));
      return nullptr;
    }
  
@@ -2410,7 +2447,7 @@
    auto buffer_ref = buffer_metadata::BufferRef::acquire(mapping, msg.uid);
    if (!buffer_ref.valid()) {
      RCUTILS_LOG_WARN_NAMED(
-@@ -49,34 +55,46 @@
+@@ -49,34 +58,46 @@
    }
    auto buffer_ref_ptr =
        std::make_unique<buffer_metadata::BufferRef>(std::move(buffer_ref));
@@ -2478,7 +2515,7 @@
    if (!publication) {
      RCUTILS_LOG_WARN_NAMED(
          "ros2_cuda_ipc_core.subscriber.buffer_mapper",
-@@ -91,11 +109,12 @@
+@@ -91,11 +112,12 @@
  
  class BufferMapper::Impl {
   public:
@@ -2494,7 +2531,7 @@
  BufferMapper::~BufferMapper() = default;
  BufferMapper::BufferMapper(BufferMapper&&) noexcept = default;
  BufferMapper& BufferMapper::operator=(BufferMapper&&) noexcept = default;
-@@ -123,7 +142,31 @@
+@@ -123,7 +145,31 @@
  std::unique_ptr<detail::MappedPublication>
  BufferMapper::acquire_publication_impl(
      const ros2_cuda_ipc_msgs::msg::BufferCore& msg) const {
@@ -2545,7 +2582,7 @@
  #include "ros2_cuda_ipc_core/buffer_metadata/buffer_ref.hpp"
  #include "ros2_cuda_ipc_core/detail/cuda_driver_context.hpp"
  #include "ros2_cuda_ipc_core/detail/read_handle_factory.hpp"
-@@ -25,41 +27,31 @@
+@@ -25,41 +27,36 @@
    std::shared_ptr<ros2_cuda_ipc_core::detail::CudaDeviceContext> context;
    CUevent event = nullptr;
  
@@ -2579,7 +2616,12 @@
 +    if (!event) return true;
 +    if (!context) return false;
 +    auto result = context->push_current();
-+    if (!result) return false;
++    if (!result) {
++      RCUTILS_LOG_ERROR_NAMED("ros2_cuda_ipc_core.subscriber.read_handle",
++                              "Completion cleanup context activation failed code=%d",
++                              result.error().code());
++      return false;
++    }
 +    auto guard = std::move(result).value();
 +    const CUresult destroyed = cuEventDestroy(event);
 +    if (destroyed != CUDA_SUCCESS) {
@@ -2604,7 +2646,7 @@
  };
  
  class DeferredReleaseQueue {
-@@ -83,6 +75,10 @@
+@@ -83,6 +80,10 @@
        // before the consumer stream has completed.  The item is intentionally
        // leaked so its resource, completion event, and buffer reference are all
        // retained.
@@ -2615,7 +2657,7 @@
        RCUTILS_LOG_ERROR_NAMED(
            "ros2_cuda_ipc_core.subscriber.read_handle",
            "Failed to enqueue deferred GPU read release; retaining buffer "
-@@ -91,6 +87,10 @@
+@@ -91,6 +92,10 @@
    }
  
    void retain_failed(DeferredItem* item) noexcept {
@@ -2626,63 +2668,34 @@
      try {
        std::lock_guard<std::mutex> lock(mutex_);
        failed_.emplace_back(item);
-@@ -109,51 +109,55 @@
+@@ -109,52 +114,67 @@
  
    void run() noexcept {
      while (true) {
 -      DeferredItem* item = nullptr;
-+      std::deque<DeferredItem*> pass;
++      std::size_t pending = 0;
        {
          std::unique_lock<std::mutex> lock(mutex_);
          condition_.wait(lock, [this]() { return !items_.empty(); });
 -        item = items_.front();
 -        items_.pop_front();
-+        pass.swap(items_);
++        pending = items_.size();
        }
 -
 -      if (!item->completion || !item->completion->context ||
 -          item->completion->event == nullptr) {
-+      for (auto* item : pass) {
-+        if (!item->completion || !item->completion->context ||
-+            item->completion->event == nullptr) {
-+          RCUTILS_LOG_ERROR_NAMED("ros2_cuda_ipc_core.subscriber.read_handle",
-+                                  "Deferred GPU completion state is missing");
-+          retain_failed(item);
-+          continue;
-+        }
-+        auto guard_result = item->completion->context->push_current();
-+        if (!guard_result) {
-+          RCUTILS_LOG_ERROR_NAMED("ros2_cuda_ipc_core.subscriber.read_handle",
-+                                  "Completion context activation failed code=%d",
-+                                  guard_result.error().code());
-+          retain_failed(item);
-+          continue;
-+        }
-+        auto guard = std::move(guard_result).value();
-+        CUresult result = cuEventQuery(item->completion->event);
-+        if (!guard.try_close()) result = CUDA_ERROR_INVALID_CONTEXT;
-+        if (result == CUDA_ERROR_NOT_READY) {
-+          enqueue(item);
-+          continue;
-+        }
-+        if (result != CUDA_SUCCESS) {
-+          RCUTILS_LOG_ERROR_NAMED("ros2_cuda_ipc_core.subscriber.read_handle",
-+                                  "Consumer completion query failed code=%d", result);
-+          retain_failed(item);
-+          continue;
-+        }
-+        if (!item->completion->try_close()) {
-+          RCUTILS_LOG_ERROR_NAMED("ros2_cuda_ipc_core.subscriber.read_handle",
-+                                  "Consumer completion event cleanup failed");
-+          retain_failed(item);
-+          continue;
-+        }
-+        item->completion.reset();
-+        item->resource.reset();
-+        detail::release_read_ref(item->buffer_ref, item->admission);
-+        item->admission.reset();
-         delete item;
+-        delete item;
 -        continue;
++      // Do not allocate a temporary deque in this noexcept worker. Failed
++      // requeue allocation already retains the charged item in enqueue().
++      for (std::size_t index = 0; index < pending; ++index) {
++        DeferredItem* item = nullptr;
++        {
++          std::lock_guard<std::mutex> lock(mutex_);
++          item = items_.front();
++          items_.pop_front();
++        }
++        process(item);
        }
 -
 -      auto guard_result = item->completion->context->push_current();
@@ -2716,12 +2729,55 @@
 -      item->resource.reset();
 -      item->buffer_ref.reset();
 -      delete item;
-+      // Poll every pending event fairly; no blocked stream stalls another read.
+-    }
 +      std::this_thread::sleep_for(std::chrono::milliseconds(1));
-     }
++    }
++  }
++
++  void process(DeferredItem* item) noexcept {
++    if (!item->completion || !item->completion->context ||
++        item->completion->event == nullptr) {
++      RCUTILS_LOG_ERROR_NAMED("ros2_cuda_ipc_core.subscriber.read_handle",
++                              "Deferred GPU completion state is missing");
++      retain_failed(item);
++      return;
++    }
++    auto guard_result = item->completion->context->push_current();
++    if (!guard_result) {
++      RCUTILS_LOG_ERROR_NAMED("ros2_cuda_ipc_core.subscriber.read_handle",
++                              "Completion context activation failed code=%d",
++                              guard_result.error().code());
++      retain_failed(item);
++      return;
++    }
++    auto guard = std::move(guard_result).value();
++    CUresult result = cuEventQuery(item->completion->event);
++    if (!guard.try_close()) result = CUDA_ERROR_INVALID_CONTEXT;
++    if (result == CUDA_ERROR_NOT_READY) {
++      enqueue(item);
++      return;
++    }
++    if (result != CUDA_SUCCESS) {
++      RCUTILS_LOG_ERROR_NAMED("ros2_cuda_ipc_core.subscriber.read_handle",
++                              "Consumer completion query failed code=%d", result);
++      retain_failed(item);
++      return;
++    }
++    if (!item->completion->try_close()) {
++      RCUTILS_LOG_ERROR_NAMED("ros2_cuda_ipc_core.subscriber.read_handle",
++                              "Consumer completion event cleanup failed");
++      retain_failed(item);
++      return;
++    }
++    item->completion.reset();
++    item->resource.reset();
++    detail::release_read_ref(item->buffer_ref, item->admission);
++    item->admission.reset();
++    delete item;
    }
  
-@@ -164,32 +168,39 @@
+   std::mutex mutex_;
+@@ -164,32 +184,44 @@
    std::thread worker_;
  };
  
@@ -2752,10 +2808,13 @@
 +    std::shared_ptr<CompletionEvent>& result) {
 +  if (!context) return true;
    auto guard_result = context->push_current();
--  if (!guard_result) {
+   if (!guard_result) {
 -    return {};
--  }
-+  if (!guard_result) return false;
++    RCUTILS_LOG_WARN_NAMED("ros2_cuda_ipc_core.subscriber.read_handle",
++                            "Completion create context activation failed code=%d",
++                            guard_result.error().code());
++    return false;
+   }
    auto guard = std::move(guard_result).value();
 -  CUevent event = nullptr;
 -  if (cuEventCreate(&event, CU_EVENT_DISABLE_TIMING) != CUDA_SUCCESS) {
@@ -2785,7 +2844,7 @@
  }
  
  bool validate_stream(
-@@ -199,33 +210,7 @@
+@@ -199,33 +231,7 @@
    if (!context) {
      return true;
    }
@@ -2820,20 +2879,22 @@
  }
  
  bool enqueue_ready_event(
-@@ -239,14 +224,19 @@
+@@ -239,14 +245,24 @@
      return true;
    }
    const auto context = resource->context;
 +  std::optional<ros2_cuda_ipc_core::detail::CudaContextGuard> guard;
    if (context) {
      auto guard_result = context->push_current();
--    if (!guard_result) {
--      return false;
--    }
+     if (!guard_result) {
++      RCUTILS_LOG_WARN_NAMED("ros2_cuda_ipc_core.subscriber.read_handle",
++                              "Ready wait context activation failed code=%d",
++                              guard_result.error().code());
+       return false;
+     }
 -    auto guard = std::move(guard_result).value();
 -  }
 -  return cuStreamWaitEvent(stream, event, 0) == CUDA_SUCCESS;
-+    if (!guard_result) return false;
 +    guard.emplace(std::move(guard_result).value());
 +  }
 +  const CUresult waited = cuStreamWaitEvent(stream, event, 0);
@@ -2846,7 +2907,7 @@
  }
  
  }  // namespace
-@@ -256,19 +246,36 @@
+@@ -256,19 +272,36 @@
  MappedPublication::MappedPublication(
      std::shared_ptr<const backend::ImportedResources> resource,
      std::unique_ptr<buffer_metadata::BufferRef> buffer_ref,
@@ -2886,7 +2947,7 @@
  
  bool MappedPublication::valid() const noexcept {
    return resource_ && resource_->dev_ptr != nullptr && buffer_ref_ != nullptr;
-@@ -288,6 +295,7 @@
+@@ -288,6 +321,7 @@
    std::shared_ptr<const backend::ImportedResources> resource;
    std::unique_ptr<buffer_metadata::BufferRef> buffer_ref;
    std::unique_ptr<DeferredItem> deferred_item;
@@ -2894,7 +2955,7 @@
    std::size_t byte_size = 0;
    int device_id = -1;
    CUstream consumer_stream = nullptr;
-@@ -303,7 +311,8 @@
+@@ -303,7 +337,8 @@
      if (!completion || completion->event == nullptr || !completion->context) {
        completion.reset();
        resource.reset();
@@ -2904,7 +2965,7 @@
        deferred_item.reset();
        return;
      }
-@@ -313,47 +322,31 @@
+@@ -313,47 +348,31 @@
        item->completion = std::move(completion);
        item->resource = std::move(resource);
        item->buffer_ref = std::move(buffer_ref);
@@ -2914,15 +2975,6 @@
 -          queue.retain_failed(item);
 -        } else {
 -          queue.enqueue(item);
--        }
--      } catch (...) {
--        // No destructor may run here: retaining the raw item keeps the
--        // resource, completion event, and buffer reference alive if queue
--        // initialization or worker creation fails.
--        RCUTILS_LOG_ERROR_NAMED(
--            "ros2_cuda_ipc_core.subscriber.read_handle",
--            "Failed to initialize deferred GPU read release queue; retaining "
--            "publication buffer reference");
 +      item->admission = std::move(admission);
 +      submit_release(item, failed);
 +    };
@@ -2939,7 +2991,15 @@
 +        if (!recorded) {
 +          RCUTILS_LOG_ERROR_NAMED("ros2_cuda_ipc_core.subscriber.read_handle",
 +                                  "Consumer completion record/restore failed code=%d", result);
-+        }
+         }
+-      } catch (...) {
+-        // No destructor may run here: retaining the raw item keeps the
+-        // resource, completion event, and buffer reference alive if queue
+-        // initialization or worker creation fails.
+-        RCUTILS_LOG_ERROR_NAMED(
+-            "ros2_cuda_ipc_core.subscriber.read_handle",
+-            "Failed to initialize deferred GPU read release queue; retaining "
+-            "publication buffer reference");
 +      } else {
 +        RCUTILS_LOG_ERROR_NAMED("ros2_cuda_ipc_core.subscriber.read_handle",
 +                                "Consumer completion context push failed code=%d",
@@ -2976,7 +3036,7 @@
      consumer_stream = nullptr;
    }
  };
-@@ -397,13 +390,21 @@
+@@ -397,13 +416,21 @@
  std::unique_ptr<MappedPublication> ReadHandleFactory::make_publication(
      std::shared_ptr<const backend::ImportedResources> resource,
      std::unique_ptr<buffer_metadata::BufferRef> buffer_ref,
@@ -3002,7 +3062,7 @@
  }
  
  std::optional<ReadHandle> ReadHandleFactory::make_bound(
-@@ -422,12 +423,20 @@
+@@ -422,12 +449,20 @@
    impl->deferred_item = std::make_unique<DeferredItem>();
    impl->byte_size = publication.byte_size_;
    impl->device_id = publication.device_id_;
@@ -3029,7 +3089,7 @@
      return std::nullopt;
    }
  
-@@ -436,6 +445,7 @@
+@@ -436,6 +471,7 @@
    // This is the ownership commit.  No fallible operation follows it.
    impl->resource = std::move(publication.resource_);
    impl->buffer_ref = std::move(publication.buffer_ref_);

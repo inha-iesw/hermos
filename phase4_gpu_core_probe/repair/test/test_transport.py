@@ -261,6 +261,8 @@ def test_import_failures_do_not_accumulate_fds_or_metadata_maps(peers):
     assert subscriber.ask('map')[0] == 'MAPPED'
     assert subscriber.ask('finish') == ['DONE', str(19 * 64)]
     close(publisher, subscriber)
+    diagnostics = Path(subscriber.stderr.name).read_text()
+    assert diagnostics.count('cuIpcOpenEventHandle failed:') == 51
 
 
 @pytest.mark.parametrize('fault', ['recv_error', 'recv_eof'])

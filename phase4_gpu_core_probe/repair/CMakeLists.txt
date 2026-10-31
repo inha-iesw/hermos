@@ -231,9 +231,45 @@ foreach(_case CloexecFallbackKeepsDescriptorsPrivateAndAllowsRetry
     OUTPUT_FILE "${CMAKE_BINARY_DIR}/ament_cmake_gtest/${_test}.txt" TIMEOUT 20)
 endforeach()
 
+target_link_options(test_subscriber_cleanup PRIVATE
+  "-Wl,--export-dynamic-symbol=pthread_create" "-Wl,--wrap=_Znwm")
+foreach(_case CreatePush WaitPush ThreadCreate Allocation)
+  set(_test "subscriber_extra_${_case}")
+  set(_xml "${AMENT_TEST_RESULTS_DIR}/${PROJECT_NAME}/${_test}.gtest.xml")
+  if(_case MATCHES "Push$")
+    set(_filter "BindContext/SubscriberBindContextFailure.ReturnsPublicationAndAllowsRetry/${_case}")
+  else()
+    set(_filter "Queue/SubscriberQueueFailure.RetainsChargedReadWithoutTerminating/${_case}")
+  endif()
+  ament_add_test(${_test}
+    COMMAND $<TARGET_FILE:test_subscriber_cleanup>
+      "--gtest_filter=${_filter}" "--gtest_output=xml:${_xml}"
+    RESULT_FILE "${_xml}"
+    OUTPUT_FILE "${CMAKE_BINARY_DIR}/ament_cmake_gtest/${_test}.txt" TIMEOUT 20)
+endforeach()
 target_link_options(test_fd_receive PRIVATE "-Wl,--wrap=socket" "-Wl,--wrap=fcntl")
 target_link_options(g3_cleanup_peer PRIVATE "-Wl,--wrap=fcntl"
   "-Wl,--export-dynamic-symbol=accept")
+target_link_options(test_subscriber_cleanup PRIVATE
+  "-Wl,--export-dynamic-symbol=pthread_cond_wait")
+set(_test "subscriber_cleanup_WorkerAllocation")
+set(_xml "${AMENT_TEST_RESULTS_DIR}/${PROJECT_NAME}/${_test}.gtest.xml")
+ament_add_test(${_test}
+  COMMAND $<TARGET_FILE:test_subscriber_cleanup>
+    "--gtest_filter=SubscriberWorkerAllocation.CompletesAndWaitsWithoutHeapAllocation"
+    "--gtest_output=xml:${_xml}"
+  RESULT_FILE "${_xml}"
+  OUTPUT_FILE "${CMAKE_BINARY_DIR}/ament_cmake_gtest/${_test}.txt" TIMEOUT 20)
+
+set(_test "subscriber_cleanup_WorkerRequeueAllocation")
+set(_xml "${AMENT_TEST_RESULTS_DIR}/${PROJECT_NAME}/${_test}.gtest.xml")
+ament_add_test(${_test}
+  COMMAND $<TARGET_FILE:test_subscriber_cleanup>
+    "--gtest_filter=SubscriberWorkerAllocation.RetainsReadWhenNotReadyRequeueAllocationFails"
+    "--gtest_output=xml:${_xml}"
+  RESULT_FILE "${_xml}"
+  OUTPUT_FILE "${CMAKE_BINARY_DIR}/ament_cmake_gtest/${_test}.txt" TIMEOUT 20)
+
 foreach(_target test_producer_initialisation test_producer_cleanup)
   target_link_options(${_target} PRIVATE "-Wl,--wrap=_Znwm")
 endforeach()

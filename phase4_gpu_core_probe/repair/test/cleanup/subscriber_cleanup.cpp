@@ -50,7 +50,15 @@ protected:
     auto seed = Ref::reserve_for_publish(metadata);
     ASSERT_TRUE(seed);
     ASSERT_TRUE(Ref::commit_publish(metadata, seed->uid));
-    auto ref = std::make_unique<Ref>(Ref::acquire(metadata, seed->uid));
+    uid = seed->uid;
+    ASSERT_EQ(cuEventCreate(&ready_event, CU_EVENT_DISABLE_TIMING), CUDA_SUCCESS);
+    ASSERT_EQ(cuEventRecord(ready_event, nullptr), CUDA_SUCCESS);
+    renew_publication();
+  }
+
+  void renew_publication()
+  {
+    auto ref = std::make_unique<Ref>(Ref::acquire(metadata, uid));
     ASSERT_TRUE(ref->valid());
     auto permit = detail::admit(epoch);
     ASSERT_TRUE(permit);
@@ -61,8 +69,6 @@ protected:
     // never dereferenced, and this fixture does not claim payload or IPC coverage.
     resource->dev_ptr = reinterpret_cast<void *>(0x1000);
     resource->context = std::move(retained).value();
-    ASSERT_EQ(cuEventCreate(&ready_event, CU_EVENT_DISABLE_TIMING), CUDA_SUCCESS);
-    ASSERT_EQ(cuEventRecord(ready_event, nullptr), CUDA_SUCCESS);
     resource->event = ready_event;
     publication = detail::ReadHandleFactory::make_publication(
       std::move(resource), std::move(ref), 64, 0, std::move(permit));
@@ -113,6 +119,7 @@ protected:
   std::shared_ptr<detail::ReadEpoch> epoch;
   std::shared_ptr<Metadata> metadata;
   std::unique_ptr<detail::MappedPublication> publication;
+  uint64_t uid = 0;
   CUevent ready_event = nullptr;
   std::string name;
 };
@@ -148,6 +155,136 @@ INSTANTIATE_TEST_SUITE_P(
   [](const ::testing::TestParamInfo<Operation> & info) {
     return info.param == Operation::Create ? "Create" : "Wait";
   });
+
+class SubscriberBindContextFailure : public SubscriberFixture,
+  public ::testing::WithParamInterface<unsigned> {};
+
+TEST_P(SubscriberBindContextFailure, ReturnsPublicationAndAllowsRetry)
+{
+  CUcontext before = nullptr;
+  ASSERT_EQ(cuCtxGetCurrent(&before), CUDA_SUCCESS);
+  failure::arm(Operation::ContextPush, GetParam());
+  ::testing::internal::CaptureStderr();
+  auto rejected = detail::ReadHandleFactory::make_bound(*publication, nullptr);
+  const auto diagnostic = ::testing::internal::GetCapturedStderr();
+  EXPECT_FALSE(rejected);
+  EXPECT_EQ(failure::failures(Operation::ContextPush), 1u);
+  const char * expected = GetParam() == 1 ?
+    "Completion create context activation failed code=" :
+    "Ready wait context activation failed code=";
+  EXPECT_NE(diagnostic.find(expected), std::string::npos);
+  EXPECT_EQ(epoch->reads.load(), 1u);
+  EXPECT_EQ(Ref::current_refcount(metadata), 1u);
+  EXPECT_FALSE(mapper->poisoned());
+  CUcontext after = nullptr;
+  ASSERT_EQ(cuCtxGetCurrent(&after), CUDA_SUCCESS);
+  EXPECT_EQ(after, before);
+  auto read = detail::ReadHandleFactory::make_bound(*publication, nullptr);
+  ASSERT_TRUE(read);
+  publication.reset();
+  read.reset();
+  ASSERT_TRUE(wait_until([this] {return drained(*mapper);}));
+  EXPECT_EQ(epoch->reads.load(), 0u);
+  EXPECT_EQ(Ref::current_refcount(metadata), 0u);
+  EXPECT_FALSE(mapper->poisoned());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+  BindContext, SubscriberBindContextFailure, ::testing::Values(1u, 2u),
+  [](const ::testing::TestParamInfo<unsigned> & info) {
+    return info.param == 1 ? "CreatePush" : "WaitPush";
+  });
+
+class SubscriberQueueFailure : public SubscriberFixture,
+  public ::testing::WithParamInterface<Operation> {};
+
+TEST_P(SubscriberQueueFailure, RetainsChargedReadWithoutTerminating)
+{
+  const auto operation = GetParam();
+  if (operation == Operation::QueueAllocation) {
+    // Initialise the singleton before arming allocation failure; the target is
+    // a later enqueue node growth, not queue construction or CUDA allocation.
+    auto warm = detail::ReadHandleFactory::make_bound(*publication, nullptr);
+    ASSERT_TRUE(warm);
+    publication.reset();
+    warm.reset();
+    ASSERT_TRUE(wait_until([this] {return epoch->reads.load() == 0;}));
+    renew_publication();
+  }
+  bool injected = false;
+  ::testing::internal::CaptureStderr();
+  for (unsigned attempt = 0; attempt < 1024 && !injected; ++attempt) {
+    if (!publication) {break;}
+    auto read = detail::ReadHandleFactory::make_bound(*publication, nullptr);
+    if (!read) {break;}
+    publication.reset();
+    failure::arm(operation);
+    read.reset();
+    failure::disarm();
+    injected = failure::failures(operation) != 0;
+    if (!injected) {
+      if (!wait_until([this] {return epoch->reads.load() == 0;})) {break;}
+      renew_publication();
+    }
+  }
+  const auto diagnostic = ::testing::internal::GetCapturedStderr();
+  ASSERT_TRUE(injected);
+  EXPECT_EQ(failure::failures(operation), 1u);
+  EXPECT_NE(diagnostic.find(operation == Operation::ThreadCreate ?
+    "Deferred queue unavailable; retaining charged GPU read" :
+    "Failed to enqueue deferred GPU read release; retaining buffer reference"), std::string::npos);
+  expect_retained_and_poisoned();
+}
+
+INSTANTIATE_TEST_SUITE_P(
+  Queue, SubscriberQueueFailure,
+  ::testing::Values(Operation::ThreadCreate, Operation::QueueAllocation),
+  [](const ::testing::TestParamInfo<Operation> & info) {
+    return info.param == Operation::ThreadCreate ? "ThreadCreate" : "Allocation";
+  });
+
+class SubscriberWorkerAllocation : public SubscriberFixture {};
+
+TEST_F(SubscriberWorkerAllocation, CompletesAndWaitsWithoutHeapAllocation)
+{
+  auto read = detail::ReadHandleFactory::make_bound(*publication, nullptr);
+  ASSERT_TRUE(read);
+  publication.reset();
+  failure::arm(Operation::WorkerAllocation);
+  read.reset();
+  // The old worker allocates a temporary deque before every wait and terminates
+  // on the injected bad_alloc. The fixed worker reaches this idle boundary
+  // without making any wrapped C++ allocation after its successful event query.
+  ASSERT_TRUE(wait_until([] {return failure::worker_idle();}));
+  EXPECT_EQ(failure::calls(Operation::WorkerAllocation), 0u);
+  EXPECT_EQ(failure::failures(Operation::WorkerAllocation), 0u);
+  EXPECT_EQ(epoch->reads.load(), 0u);
+  EXPECT_EQ(Ref::current_refcount(metadata), 0u);
+  EXPECT_TRUE(drained(*mapper));
+  EXPECT_FALSE(mapper->poisoned());
+}
+
+TEST_F(SubscriberWorkerAllocation, RetainsReadWhenNotReadyRequeueAllocationFails)
+{
+  auto read = detail::ReadHandleFactory::make_bound(*publication, nullptr);
+  ASSERT_TRUE(read);
+  publication.reset();
+  ::testing::internal::CaptureStderr();
+  failure::arm(Operation::WorkerRequeueAllocation);
+  read.reset();
+  const bool idle = wait_until([] {return failure::worker_idle();});
+  const auto diagnostic = ::testing::internal::GetCapturedStderr();
+  ASSERT_TRUE(idle);
+  EXPECT_GT(failure::worker_not_ready_queries(), 0u);
+  EXPECT_EQ(failure::calls(Operation::WorkerRequeueAllocation), 1u);
+  EXPECT_EQ(failure::failures(Operation::WorkerRequeueAllocation), 1u);
+  const std::string expected =
+    "Failed to enqueue deferred GPU read release; retaining buffer reference";
+  const auto found = diagnostic.find(expected);
+  ASSERT_NE(found, std::string::npos);
+  EXPECT_EQ(diagnostic.find(expected, found + expected.size()), std::string::npos);
+  expect_retained_and_poisoned();
+}
 
 enum class CleanupFailure {Record, Query, CompletionDestroy, BindWaitAndDestroy};
 
