@@ -224,6 +224,17 @@ int subscriber(const std::string & topic, std::size_t limit)
         std::cout << "DROPPED" << std::endl;
       } else if (command == "close_read") {
         std::cout << "READ_CLOSED " << mapper->try_close() << std::endl;
+      } else if (command == "access") {
+        if (reads.empty()) {throw std::runtime_error("no imported read to inspect");}
+        // The probe selects device 0 in main; query the actual imported mapping.
+        const CUmemLocation location{CU_MEM_LOCATION_TYPE_DEVICE, 0};
+        unsigned long long flags = 0;
+        const auto result = cuMemGetAccess(
+          &flags, &location, reinterpret_cast<CUdeviceptr>(reads.front().data<uint8_t>()));
+        if (result != CUDA_SUCCESS) {
+          throw std::runtime_error("cuMemGetAccess failed: " + std::to_string(result));
+        }
+        std::cout << "ACCESS " << flags << std::endl;
       } else if (command == "pending") {
         const auto status = cudaStreamQuery(stream->value);
         if (status != cudaErrorNotReady) {g3_test::check(status);}

@@ -20,7 +20,7 @@ EVENTS = {'READY', 'PUB', 'FULL', 'AVAILABLE', 'CONNECTIONS', 'CLOSED', 'STASHED
           'MAPPED', 'REJECTED', 'DROPPED', 'DONE', 'REMAPPED', 'LIMITS_REJECTED',
           'LIMITS_ACCEPTED', 'FAST_DONE', 'RESOURCES', 'MISSING', 'UNEXPECTED_MAP',
           'PENDING', 'COMPLETE', 'PRODUCED', 'POISONED', 'CLOSING', 'READ_CLOSED', 'FAULT_STATS',
-          'FD_REPLY_STATS', 'RECEIPT_STATS', 'VMM_STATS', 'BIND_STATS'}
+          'FD_REPLY_STATS', 'RECEIPT_STATS', 'VMM_STATS', 'BIND_STATS', 'ACCESS'}
 
 
 class Peer:
@@ -141,6 +141,17 @@ def close(publisher, subscriber):
         assert time.monotonic() < deadline
         time.sleep(0.005)
     assert publisher.process.wait(timeout=5) == 0
+
+
+def test_imported_gpu_mapping_reports_read_write_access(peers):
+    publisher, subscriber = peers()
+    packet = publish(publisher, 19)
+    assert subscriber.ask('stash') == ['STASHED', packet[1]]
+    assert subscriber.ask('map_only')[:2] == ['MAPPED', packet[1]]
+    # CU_MEM_ACCESS_FLAGS_PROT_READWRITE is 3; CPU heap RO does not carry over.
+    assert subscriber.ask('access') == ['ACCESS', '3']
+    assert subscriber.ask('finish') == ['DONE', str(19 * 64)]
+    close(publisher, subscriber)
 
 
 def test_descriptor_release_does_not_release_pending_gpu_read(peers):
