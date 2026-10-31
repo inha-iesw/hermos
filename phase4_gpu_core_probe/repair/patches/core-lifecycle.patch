@@ -226,7 +226,16 @@
  };
 --- a/ros2_cuda_ipc_core/include/ros2_cuda_ipc_core/publisher/gpu_buffer_manager.hpp
 +++ b/ros2_cuda_ipc_core/include/ros2_cuda_ipc_core/publisher/gpu_buffer_manager.hpp
-@@ -15,12 +15,12 @@
+@@ -7,6 +7,8 @@
+ 
+ #include <cstdint>
+ #include <optional>
++#include <string>
++#include <vector>
+ 
+ #include "ros2_cuda_ipc_core/publisher/gpu_buffer_pool.hpp"
+ #include "ros2_cuda_ipc_core/transport/buffer_descriptor.hpp"
+@@ -15,12 +17,12 @@
  
  class GpuBufferManager;
  
@@ -245,7 +254,7 @@
  class PublishBlock {
   public:
    /// Move a publish block while transferring ownership of its reservation.
-@@ -42,8 +42,9 @@
+@@ -42,8 +44,9 @@
  
    /// Build the descriptor, record the ready event, and commit the reservation.
    ///
@@ -257,7 +266,7 @@
    /// The subsequent middleware publish result does not affect block lifecycle.
    ///
    /// @return The descriptor when preparation and commit succeed; a failed
-@@ -51,7 +52,7 @@
+@@ -51,7 +54,7 @@
    [[nodiscard]] detail::CudaResult<transport::BufferDescriptor> prepare_publish(
        CUstream stream) noexcept;
  
@@ -266,7 +275,7 @@
    void cancel() noexcept;
  
    /// Check whether the block can still be used for publishing.
-@@ -61,18 +62,19 @@
+@@ -61,18 +64,19 @@
    /// Allow the manager to construct blocks only from valid reservations.
    friend class GpuBufferManager;
  
@@ -289,7 +298,7 @@
  class GpuBufferManager {
   public:
    /// Configuration for a GPU buffer manager.
-@@ -90,7 +92,11 @@
+@@ -90,7 +94,11 @@
    /// Construct a manager with the given configuration.
    explicit GpuBufferManager(Config config);
  
@@ -302,7 +311,7 @@
    ~GpuBufferManager();
  
    GpuBufferManager(const GpuBufferManager&) = delete;
-@@ -103,8 +109,20 @@
+@@ -103,8 +111,20 @@
    /// @return true when both pools are initialized successfully.
    bool initialise();
  
@@ -324,7 +333,7 @@
  
    /// Check whether the block pool is initialized.
    bool is_initialised() const noexcept;
-@@ -112,10 +130,13 @@
+@@ -112,10 +132,24 @@
    /// Return the process locator carried by every block descriptor.
    uint32_t publisher_pid() const noexcept;
  
@@ -332,6 +341,17 @@
 -  /// @return A publish block when a reservation is available; std::nullopt
 -  /// otherwise.
 -  [[nodiscard]] std::optional<PublishBlock> acquire_for_publish();
++  /**
++   * @brief Snapshot every owned metadata and socket path before peer dispatch.
++   * @pre Initialise succeeded; the caller serialises initialise, close and this call.
++   * @return Absolute paths for all blocks, including blocks never published.
++   * @throws std::logic_error if the pool is not initialised.
++   * @note A supervisor must register this snapshot before enabling dispatch.
++   * It is not a startup crash journal. Do not recreate a registered pool within
++   * the same supervised epoch; stop and restart the complete peer group instead.
++   */
++  std::vector<std::string> owned_ipc_paths() const;
++
 +  /**
 +   * @brief Reserve a block for writes on one explicit stream.
 +   * @param producer_stream Primary-context stream receiving every write; PER_THREAD rejected.
@@ -342,7 +362,7 @@
  
   private:
    /// Allow a block to delegate resource operations to its owning manager
-@@ -133,7 +154,7 @@
+@@ -133,7 +167,7 @@
    bool cancel(const GpuBufferPool::BlockReservation& reservation) noexcept;
  
    Config config_;
@@ -1696,7 +1716,11 @@
  }  // namespace ros2_cuda_ipc_core::detail
 --- a/ros2_cuda_ipc_core/src/publisher/gpu_buffer_manager.cpp
 +++ b/ros2_cuda_ipc_core/src/publisher/gpu_buffer_manager.cpp
-@@ -9,9 +9,9 @@
+@@ -6,12 +6,13 @@
+ #include <rcutils/logging_macros.h>
+ 
+ #include <utility>
++#include <stdexcept>
  
  namespace ros2_cuda_ipc_core::publisher {
  
@@ -1708,7 +1732,7 @@
  
  PublishBlock::PublishBlock(PublishBlock&& other) noexcept {
    move_from(std::move(other));
-@@ -28,7 +28,7 @@
+@@ -28,7 +29,7 @@
  PublishBlock::~PublishBlock() noexcept { cancel(); }
  
  void PublishBlock::move_from(PublishBlock&& other) noexcept {
@@ -1717,7 +1741,7 @@
    reservation_ = std::move(other.reservation_);
    other.owner_ = nullptr;
  }
-@@ -41,7 +41,7 @@
+@@ -41,7 +42,7 @@
  
  detail::CudaResult<transport::BufferDescriptor> PublishBlock::prepare_publish(
      CUstream stream) noexcept {
@@ -1726,7 +1750,7 @@
      return detail::CudaResult<transport::BufferDescriptor>::failure(
          detail::CudaDriverError(CUDA_ERROR_INVALID_HANDLE));
    }
-@@ -72,24 +72,25 @@
+@@ -72,24 +73,25 @@
  
  void PublishBlock::quarantine(const char* step,
                                const detail::CudaDriverError* error) noexcept {
@@ -1755,7 +1779,7 @@
        reservation_.block_id, static_cast<unsigned long long>(reservation_.uid),
        reservation_.mapping ? reservation_.mapping->shm_name().c_str() : "",
        step);
-@@ -106,61 +107,64 @@
+@@ -106,61 +108,76 @@
  }
  
  GpuBufferManager::GpuBufferManager(Config config)
@@ -1788,6 +1812,18 @@
  }
  
 -std::optional<PublishBlock> GpuBufferManager::acquire_for_publish() {
++std::vector<std::string> GpuBufferManager::owned_ipc_paths() const {
++  if (!is_initialised()) throw std::logic_error("GPU pool is not initialised");
++  std::vector<std::string> paths;
++  paths.reserve(buffer_pool_->size() * 2);
++  for (std::size_t index = 0; index < buffer_pool_->size(); ++index) {
++    const auto* block = buffer_pool_->resources(static_cast<uint32_t>(index));
++    paths.push_back("/dev/shm" + block->shared_metadata->shm_name());
++    paths.push_back(block->vmm_socket_path);
++  }
++  return paths;
++}
++
 +std::optional<PublishBlock> GpuBufferManager::acquire_for_publish(CUstream producer_stream) {
    if (!is_initialised()) {
      return std::nullopt;

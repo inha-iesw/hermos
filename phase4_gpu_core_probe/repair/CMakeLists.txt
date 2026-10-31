@@ -277,6 +277,12 @@ ament_add_test(${_test}
   RESULT_FILE "${_xml}"
   OUTPUT_FILE "${CMAKE_BINARY_DIR}/ament_cmake_gtest/${_test}.txt" TIMEOUT 20)
 
+include(recovery/register.cmake)
+ament_add_pytest_test(test_device_recovery recovery/test_device.py TIMEOUT 120
+  ENV G3_TRANSPORT_PEER=$<TARGET_FILE:g3_transport_peer>
+    G3_CLEANUP_PEER=$<TARGET_FILE:g3_cleanup_peer>)
+set_tests_properties(test_device_recovery PROPERTIES LABELS "requires_kernel_module;cuda")
+
 foreach(_target test_producer_initialisation test_producer_cleanup)
   target_link_options(${_target} PRIVATE "-Wl,--wrap=_Znwm")
 endforeach()
