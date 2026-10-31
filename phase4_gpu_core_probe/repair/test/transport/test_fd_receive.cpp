@@ -12,6 +12,7 @@
 
 #include <array>
 #include <cerrno>
+#include <cstdarg>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -43,6 +44,12 @@ thread_local bool single_fd_capacity = false;
 thread_local Observation observed;
 enum class Failure {Retain, Push, Import};
 thread_local Failure failure = Failure::Retain;
+enum class RequestFailure {None, Socket, FallbackSocket, SetFlags, FallbackSuccess};
+thread_local RequestFailure request_failure = RequestFailure::None;
+thread_local unsigned socket_calls = 0;
+thread_local unsigned set_flags_calls = 0;
+thread_local int request_socket = -1;
+thread_local int request_flags = -1;
 
 template<typename Function>
 Function original(const char * symbol)
@@ -50,6 +57,49 @@ Function original(const char * symbol)
   return reinterpret_cast<Function>(dlsym(RTLD_NEXT, symbol));
 }
 }  // namespace
+
+// --wrap confines socket/fcntl fault injection to static core calls. Driver
+// libraries retain their own libc bindings, and the sender runs on another thread.
+extern "C" int __real_socket(int domain, int type, int protocol);
+extern "C" int __wrap_socket(int domain, int type, int protocol)
+{
+  if (observing && domain == AF_UNIX && (type & ~SOCK_CLOEXEC) == SOCK_STREAM) {
+    ++socket_calls;
+    if (request_failure == RequestFailure::Socket ||
+      (request_failure == RequestFailure::FallbackSocket && !(type & SOCK_CLOEXEC)))
+    {
+      errno = EMFILE;
+      return -1;
+    }
+    if (request_failure != RequestFailure::None && (type & SOCK_CLOEXEC)) {
+      errno = EINVAL;
+      return -1;
+    }
+    request_socket = __real_socket(domain, type, protocol);
+    return request_socket;
+  }
+  return __real_socket(domain, type, protocol);
+}
+
+extern "C" int __real_fcntl(int fd, int command, ...);
+extern "C" int __wrap_fcntl(int fd, int command, ...)
+{
+  if (command == F_GETFD) {return __real_fcntl(fd, command);}
+  if (command != F_SETFD) {errno = EINVAL; return -1;}
+  va_list arguments;
+  va_start(arguments, command);
+  const int flags = va_arg(arguments, int);
+  va_end(arguments);
+  if (observing && fd == request_socket) {
+    ++set_flags_calls;
+    if (request_failure == RequestFailure::SetFlags) {errno = EIO; return -1;}
+  }
+  const int result = __real_fcntl(fd, command, flags);
+  if (observing && fd == request_socket && result == 0) {
+    request_flags = __real_fcntl(fd, F_GETFD);
+  }
+  return result;
+}
 
 extern "C" ssize_t recvmsg(int socket, msghdr * message, int flags)
 {
@@ -207,6 +257,10 @@ protected:
   {
     ASSERT_EQ(cudaSetDevice(0), cudaSuccess);
     failure = Failure::Retain;
+    request_failure = RequestFailure::None;
+    socket_calls = set_flags_calls = 0;
+    request_socket = -1;
+    request_flags = -1;
     char path[] = "/tmp/g3_fd_receive_XXXXXX";
     ASSERT_NE(mkdtemp(path), nullptr);
     directory_ = path;
@@ -292,6 +346,42 @@ protected:
     EXPECT_GE(fcntl(source_, F_GETFD), 0);
   }
 
+  void expect_request_failure(Mapper & mapper, RequestFailure selected)
+  {
+    const int baseline = open_fd_count();
+    ASSERT_GT(baseline, 0);
+    observed = {};
+    socket_calls = set_flags_calls = 0;
+    request_socket = -1;
+    request_failure = selected;
+    single_fd_capacity = false;
+    Sender sender(listener_, source_, {"Single", 1, false, false});
+    ::testing::internal::CaptureStderr();
+    observing = true;
+    auto mapped = mapper.map(msg_, CU_STREAM_LEGACY);
+    observing = false;
+    const auto diagnostic = ::testing::internal::GetCapturedStderr();
+    // The bounded sender must see no connection. On the broken path it replies
+    // normally so the regression fails without blocking in recvmsg.
+    EXPECT_EQ(sender.finish(), -1);
+    EXPECT_FALSE(mapped);
+    EXPECT_EQ(observed.receives, 0u);
+    EXPECT_EQ(observed.retains, 0u);
+    EXPECT_EQ(observed.imports, 0u);
+    EXPECT_EQ(socket_calls, selected == RequestFailure::Socket ? 1u : 2u);
+    EXPECT_EQ(set_flags_calls, selected == RequestFailure::SetFlags ? 1u : 0u);
+    EXPECT_NE(diagnostic.find(selected == RequestFailure::SetFlags ?
+      "request socket F_SETFD failed:" : "socket(AF_UNIX) failed:"), std::string::npos);
+    EXPECT_EQ(open_fd_count(), baseline);
+    EXPECT_EQ(Ref::current_refcount(mapping_), 0u);
+    EXPECT_FALSE(mapper.poisoned());
+    if (request_socket >= 0) {
+      EXPECT_EQ(fcntl(request_socket, F_GETFD), -1);
+      EXPECT_EQ(errno, EBADF);
+    }
+    request_failure = RequestFailure::None;
+  }
+
 private:
   int listener_ = -1;
   int source_ = -1;
@@ -353,6 +443,35 @@ TEST_F(ReceivedFds, SingleFdClosesWhenImportFailsAndAllowsRetry)
   for (unsigned attempt = 0; attempt < 3; ++attempt) {
     expect_reply(mapper, {"Single", 1, false, false}, 1);
   }
+  EXPECT_TRUE(mapper.try_close());
+}
+class FailedFdRequest : public ReceivedFds,
+  public ::testing::WithParamInterface<RequestFailure> {};
+
+TEST_P(FailedFdRequest, RejectsBeforeConnectAndReturnsAdmissionForRetry)
+{
+  Mapper mapper({1, 64});
+  expect_request_failure(mapper, GetParam());
+  expect_reply(mapper, {"Single", 1, false, false}, 1);
+  EXPECT_TRUE(mapper.try_close());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+  Request, FailedFdRequest,
+  ::testing::Values(RequestFailure::Socket, RequestFailure::FallbackSocket, RequestFailure::SetFlags),
+  [](const ::testing::TestParamInfo<RequestFailure> & info) {
+    return info.param == RequestFailure::Socket ? "Socket" :
+           info.param == RequestFailure::FallbackSocket ? "FallbackSocket" : "SetFlags";
+  });
+
+TEST_F(ReceivedFds, FallbackSocketSetsCloseOnExecAndReachesReceipt)
+{
+  Mapper mapper({1, 64});
+  request_failure = RequestFailure::FallbackSuccess;
+  expect_reply(mapper, {"Single", 1, false, false}, 1);
+  EXPECT_EQ(socket_calls, 2u);
+  EXPECT_EQ(set_flags_calls, 1u);
+  EXPECT_EQ(request_flags, FD_CLOEXEC);
   EXPECT_TRUE(mapper.try_close());
 }
 }  // namespace

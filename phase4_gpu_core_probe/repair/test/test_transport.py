@@ -495,6 +495,35 @@ def test_invalid_fd_reply_releases_resources_and_allows_real_import(peers, fault
         assert 'recvmsg on ' not in diagnostics
 
 
+@pytest.mark.parametrize('fault,diagnostic', [
+    ('accept_eintr', None),
+    ('accept_error', 'accept('),
+    ('accepted_getfd', 'accepted FD F_GETFD failed:'),
+    ('accepted_setfd', 'accepted FD F_SETFD failed:'),
+])
+def test_fd_server_error_closes_client_and_allows_same_descriptor_retry(peers, fault, diagnostic):
+    publisher, subscriber = peers(reply_fault=fault)
+    packet = publish(publisher, 59)
+    assert subscriber.ask('stash') == ['STASHED', packet[1]]
+    before = (settled_resources(publisher), settled_resources(subscriber))
+    for attempt in range(1, 4):
+        assert subscriber.ask('map_only') == ['REJECTED']
+        assert publisher.ask('fd_reply_stats') == [
+            'FD_REPLY_STATS', str(attempt), str(attempt), '0']
+        assert (settled_resources(publisher), settled_resources(subscriber)) == before
+    assert subscriber.ask('map')[:2] == ['MAPPED', packet[1]]
+    assert subscriber.ask('finish') == ['DONE', str(59 * 64)]
+    assert publisher.ask('fd_reply_stats') == ['FD_REPLY_STATS', '4', '3', '0']
+    assert (settled_resources(publisher), settled_resources(subscriber)) == before
+    close(publisher, subscriber)
+    producer_log = Path(publisher.stderr.name).read_text()
+    for prefix in ('accept(', 'accepted FD F_GETFD failed:', 'accepted FD F_SETFD failed:'):
+        assert producer_log.count(prefix) == (3 if prefix == diagnostic else 0)
+    consumer_log = Path(subscriber.stderr.name).read_text()
+    assert consumer_log.count('publisher closed FD request without data') == 3
+    assert 'recvmsg on ' not in consumer_log
+
+
 def test_gpu_consumer_crash_strands_fixed_slot_until_peer_restart(peers):
     publisher, subscriber = peers()
     publish(publisher, 53)

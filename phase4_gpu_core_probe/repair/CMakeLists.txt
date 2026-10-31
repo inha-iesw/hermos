@@ -231,6 +231,9 @@ foreach(_case CloexecFallbackKeepsDescriptorsPrivateAndAllowsRetry
     OUTPUT_FILE "${CMAKE_BINARY_DIR}/ament_cmake_gtest/${_test}.txt" TIMEOUT 20)
 endforeach()
 
+target_link_options(test_fd_receive PRIVATE "-Wl,--wrap=socket" "-Wl,--wrap=fcntl")
+target_link_options(g3_cleanup_peer PRIVATE "-Wl,--wrap=fcntl"
+  "-Wl,--export-dynamic-symbol=accept")
 foreach(_target test_producer_initialisation test_producer_cleanup)
   target_link_options(${_target} PRIVATE "-Wl,--wrap=_Znwm")
 endforeach()

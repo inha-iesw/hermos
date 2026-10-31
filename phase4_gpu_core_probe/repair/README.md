@@ -13,7 +13,7 @@ The original rejection diagnostics and upstream baseline are preserved in
 `0e8933c8e58ffa7f1240a4c9efda3a2b84e5398c` with GNU patch, zero fuzz, and verifies
 every resulting source file. It neither modifies the pristine tree nor invokes
 Git. The MIT core patch is `patches/core-lifecycle.patch`, SHA256
-`bc675a69f289ed007b33fce1d32c3cfb257c52d81cd1c7b6276aace8f04d8bf5`
+`b1781523e1471f7273a37e9b68dd719a5424772f64b6927153d573d192d0141d`
 (23 core files).
 
 The existing CUDA VMM allocation/import, SCM_RIGHTS FD transfer and IPC event
