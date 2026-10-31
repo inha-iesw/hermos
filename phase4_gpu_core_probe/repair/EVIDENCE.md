@@ -3,8 +3,10 @@
 The [README](README.md) owns the current contract, build procedure, test inventory
 and remaining gates. This file owns execution results and the source identity
 that each result tested. The raw `log/` evidence is Git-ignored; this tracked
-summary does not replace its XML, binaries or hashes. All stages below left
-the full G3 adoption gate open. Recorded PASS is not a new execution or finalize.
+summary does not replace its XML, binaries or hashes. Stages through §34 left
+G3 adoption open. §35 records acceptance under the user-approved private-namespace
+operating contract on the tested Thor host. Recorded PASS is not a new execution
+or finalize.
 Dates follow the design log's KST stage dates.
 
 | Stage | Date | Patch prefix | Recorded GPU result |
@@ -24,6 +26,8 @@ Dates follow the design log's KST stage dates.
 | Post-import VMM setup failure recovery (§32) | 2026-10-30 | `cc8185be`, unchanged | 59 targets, 178 PASS + 3 multi-GPU SKIP, including 30 actual transport and 15 host lineage cases |
 | Post-import review corrections (§32 follow-up) | 2026-10-30 | `cc8185be`, unchanged | 30 actual transport PASS and 13 host regression PASS; full 181-case probe and CPU verifier not rerun |
 | Real imported-resource bind recovery (§33) | 2026-10-30 | `9a6a19d3` | 59 targets, 180 PASS + 3 multi-GPU SKIP, including 32 actual transport and 15 host lineage cases; separate 13 host regression PASS |
+| Failure-path completion and owned-peer recovery (§34) | 2026-10-30 | `2e33677c` | Full device run passed; counts and unresolved resource-accumulation gate recorded below |
+| Private namespace epoch containment (§35) | 2026-10-31 | `2e33677c`, unchanged | Selected namespace suite passed; G3 accepted under the private-epoch operating contract below |
 
 ## Initial bounded repair and primary-release comparison
 
@@ -558,6 +562,355 @@ Remaining producer granularity/metadata, FD fallback/thread, asynchronous CUDA,
 operation-diagnostic and production recovery work is listed in the README matrix.
 G3 remains open; G4/G5 and Orin remain unfinished. Finalize and Git mutation were
 not run for this change.
+
+
+## Failure-path completion and owned-peer recovery (2026-10-30, §34)
+
+The full current-revision device run passed. G3 adoption remains open because the
+resource-accumulation question below is unresolved. The canonical patch is
+`2e33677cd3f71ed718ab40ec491a32dabf987c79f0eb3426964c3777f892e715`;
+zero-fuzz reconstruction verified all 140 source files, including 23 patched core
+files. The table separates the full run from its included subsets; subset passes
+are not added again to the total.
+
+| Check | Recorded result |
+|---|---|
+| Full Thor/device-and-host probe | 81 targets, 264 collected = **261 PASS + 3 multi-GPU SKIP**, failures/errors zero |
+| Actual transport subset | **37 PASS**, included above |
+| Supervisor device subset | **4 PASS**, included above |
+| Session/protocol host subset | **25 PASS**: 15 runner + 10 protocol, included above |
+| Recovery host subset | **25 PASS**, included above |
+| CPU verifier | 39 targets, 584 collected = **466 PASS + 118 device opt-in SKIP**, failures/errors zero |
+| G3 adoption | Open, including the resource-accumulation question below |
+
+An earlier 79-target native invocation also completed successfully with actual
+transport/recovery opt-ins disabled. The full run above supersedes that invocation
+for the tested source; the earlier skips are not device coverage. Two review
+findings were corrected and rechecked; the recheck reported no remaining findings.
+That review result does not close the resource-accumulation gate.
+
+The initial full-device run in this stage contained 261 cases: 258 PASS and three
+multi-GPU skips, including 36 transport and two supervisor device passes. The
+latest `gate-device` rerun above adds one actual mapping-access observation and
+two terminal-poison recovery cases. An independent review reported no findings.
+Both full runs used the same canonical core patch; their totals are not added.
+
+Producer tests now cover initial granularity lookup, first/second owned metadata
+`ftruncate`/`mmap`, exported/listener close-on-exec setup, server thread creation,
+allocation exceptions and real socket-name collision. The core fails closed when
+fcntl fails, rolls initialisation exceptions back before rethrowing, and removes
+only socket names it successfully bound. The first producer fixture run exposed
+incorrect oracle expectations; those were corrected before subsequent native
+verification rather than being counted as core rollback regressions.
+
+Subscriber additions cover completion-create/ready-wait context activation,
+queue construction/thread failures and worker allocation behavior. The previous
+worker's temporary deque allocation in a `noexcept` thread was reproduced as
+SIGABRT (return code -6) under the targeted allocation failure. The repaired
+worker processes and waits without that allocation. Failed queue setup retains
+the charged read and terminally rejects further admission. Existing asynchronous
+record/query/cleanup tests remain distinct from these additions.
+
+Native request tests add CLOEXEC fallback and request-socket/fcntl rejection and
+retry. Actual peer scenarios add accepted-FD F_GETFD/F_SETFD and accept EINTR/EIO
+errors followed by same-descriptor import, checksum and drain. Accept injection
+first closes a real accepted FD, then returns the chosen errno; it exercises the
+server's error branch rather than real kernel exhaustion. The existing bad-event
+case now requires 51 event-open diagnostics but still does not assert the full
+receipt VMM rollback counter set. CUDA fault injection skips the selected driver
+call, so observed cleanup and retry do not describe all real-driver partial states.
+
+The added mapping-access case queries `cuMemGetAccess` on the consumer's actual
+imported address and requires `CU_MEM_ACCESS_FLAGS_PROT_READWRITE` (3), then
+checks the payload and drains. It records native GPU permissions explicitly;
+CPU heap read-only protection does not imply a read-only GPU mapping.
+
+The diagnostic audit (D6) combines producer/bind context and event errors, parser
+rejection details, descriptor rejection reasons and mmap errno preservation in
+this patch revision. Synthetic bind fixtures preserve their publication; actual
+mapper bind failure drops it and a retry repeats the full VMM/event import. The
+latter has an unmeasured cost and is not an import-cache performance claim.
+
+The tracked `session/` runner and host regressions implement D5. The runner rejects
+relative stages and empty commands, preserves existing stages, validates the
+existing ARM64 artifact/source manifests, waits for refcount zero and records
+test and teardown results independently. A session-specific TMPDIR plus a separate
+G3_PEER_LOG_ROOT preserve peer stdout/stderr across later pytest cleanup. Original
+runner copies and frozen evidence remain under `log/g3/post-import-review-fixes/`.
+The source/artifact manifests still depend on the existing nested fork and device
+build; tracked tooling alone does not make an outer clean checkout reproducible.
+
+The owned-peer supervisor registers a complete directly launched group before
+GPU traffic, pins each resource inode and child pidfd, and waits for every peer
+to die before removing registered unchanged names and spending a bounded restart
+budget. It includes unpublished resources. Missing startup registration, foreign
+ownership or replaced names prevent automatic cleanup/restart; an old stage is
+not adopted after supervisor failure. These are fail-closed limits, not recovered
+cases. The latest full run's supervisor device cases cover unpublished-resource
+normal stop, three reader-SIGKILL restart cycles, and two terminal-poison paths
+(`partial_unmap` and `event_destroy`). For poison, the fixture requests peer quit,
+observes exit code 1, invokes `Group.restart()`, and verifies a fresh checksum
+while an independent pair continues to progress. This verifies exit-driven group
+recovery; it does not reset or repair a live poisoned mapper.
+
+During an early host runner argument test, the subprocess guard was missing and
+the test accidentally loaded the verified test module once. No intended test
+command ran; normal unload completed with rmmod exit zero. The recorded existing
+module, sockets and metadata were preserved, and the driver shared-memory count
+and bytes were unchanged. The session record is preserved at
+`log/g3/completion/host-test-isolation-incident/`. Host fixtures were changed to
+reject unexpected subprocesses by default. This incident is not a host-only test
+result and is not omitted from the stage history.
+
+The initial full-device runner observed module refcount **2 → 0 after 0.05022 seconds**,
+then normal rmmod and runner exit zero. Existing sockets, module and repaired
+metadata were preserved. `cuda.shm.*` changed from **1,116 files / 91,422,720 bytes**
+to **1,205 files / 98,713,600 bytes**: +89 files / +7,290,880 bytes.
+
+The standalone [event probe](residency/event_probe.py) subsequently narrowed the
+reproducer. It calls `libcuda`/`libcudart` through ctypes without Agnocast, heaphook
+or the repaired core. CUDA calls in the completed sequences returned zero,
+including explicit event destruction, but runtime IPC-event cycles left a named
+object after process exit. The earlier mixed-event run increased the inventory
+from **1,207 to 1,209 files**, one new object in each of its last two mixed cycles.
+The more specific runtime-event run increased it from **1,209 to 1,213 files**:
+
+| Event-probe modes, in execution order | New objects per cycle |
+|---|---|
+| `event`, `export`, `pair`, `crash_pair` (driver only) | 0, 0, 0, 0 |
+| `runtime_init`, `runtime`, `runtime_callback`, `runtime_exit` | 0, 0, 0, 0 |
+| `runtime_event`, `runtime_event` | 1, 1 |
+| `mixed_event`, `mixed_event` | 1, 1 |
+
+Each new object was **81,920 bytes**. Runtime-only IPC-event
+create/record/synchronize/export/destroy reproduced the residue, so it is not
+specific to mixed runtime/driver calls. The [VMM probe](residency/vmm_probe.cpp)
+observed no new objects in driver-only allocate/export and normal/crash IPC
+import sequences. These finite observations isolate a sufficient reproducer;
+they do not establish physical VRAM/event/VMM residency, a driver cleanup contract,
+or one-to-one attribution for every object from the full suite.
+
+After those probes, the latest `gate-device` full rerun observed refcount zero
+immediately after tests and before normal unload; the recorded check duration was
+0.000175518 seconds. Test, rmmod and runner exits were zero, the owned module was
+gone, and all existing socket/module/metadata preservation checks passed.
+`cuda.shm.*` increased from **1,213 files / 99,368,960 bytes** to **1,309 files /
+107,233,280 bytes**: +96 files / +7,864,320 bytes. This newer observation leaves
+the original accumulation gate open despite all testcase assertions passing.
+
+Latest evidence: `log/g3/completion/gate-device/{counts.json,device-session.json}`
+and `log/g3/completion/assessment.json`; the latter records the open G3 verdict,
+140-source reconstruction identity and 86 binary hashes. Earlier full-run evidence
+remains in `full-device/` and `probe-counts.json`, and CPU results in
+`cpu/counts.json`. The residue investigations are
+`{mixed-event-residency,runtime-event-residency,vmm-residency,vmm-ipc-residency}/result.json`
+under the same stage directory. The original no-unbounded-accumulation condition
+still applies. `cuda.shm.*` objects remain outside application metadata cleanup;
+safe deletion, PID/name reuse and bounded containment are unresolved. Private
+namespace deployment is awaiting user selection and has not been validated. No
+CUDA shared-memory object was deleted and no device reset was performed.
+FD/metadata baselines alone cannot establish physical VMM/event/VRAM recovery or
+payload copy absence. G3 remains open; G4/G5 and Orin validation remain separate
+unfinished work. Finalize and Git mutation have not been run for this stage.
+
+## Private namespace epoch containment (2026-10-31 KST, §35)
+
+The user approved a fresh private IPC/mount namespace and `/dev/shm` for every
+complete GPU peer-group epoch. G3 **PASS** applies to that operating contract on
+the tested Thor host. The §34 OPEN verdict and its growing host-shm inventory
+remain historical results for the earlier unisolated execution boundary.
+The canonical core patch remains
+`2e33677cd3f71ed718ab40ec491a32dabf987c79f0eb3426964c3777f892e715`.
+
+| Check | Recorded result |
+|---|---|
+| Selected namespace follow-up | 4 targets, 68 collected = **68 PASS**, skips/failures/errors zero |
+| Host recovery subset | **63 PASS**: 25 Group/CLI + 23 namespace worker + 15 isolated owner, included above |
+| Actual GPU namespace subset | **5 PASS**, included above |
+| Current CTest registration | 84 targets; the full current registry was not rerun in this follow-up |
+| Earlier full core baseline | §34: 81 targets, 264 collected = **261 PASS + 3 multi-GPU SKIP**; not a new namespace-stage run |
+| Earlier CPU baseline | 39 targets, 584 collected = **466 PASS + 118 device opt-in SKIP**; not rerun in this follow-up |
+| G3 adoption | PASS for the approved private-epoch contract on the tested Thor host |
+
+The default `recovery/run.py` CLI now owns a separate `IsolatedEpoch` for each
+attempt. Its non-root owner launches a privileged bootstrap through sudo and
+pins the announced worker with a pidfd, then validates its live PID/start-time handshake.
+The worker unshares IPC/mount namespaces, makes mount propagation private and
+mounts empty tmpfs at `/dev/shm`; the PID namespace is unchanged. Before starting
+peers it restores the caller's UID/GID/groups, verifies zero capabilities, sets
+`NoNewPrivs` and acts as a child subreaper. Worker `LD_PRELOAD` is rejected;
+heaphook belongs only in each peer's command environment.
+
+Every GPU holder and communicating Agnocast peer must be inside the epoch.
+External peers, namespace/private-shm FD export and forking GPU users are outside
+the contract. The worker runs one registered `Group`, waits for all direct peers,
+then waits for adopted unlink daemons to exit naturally with status zero and for
+`waitpid` to report `ECHILD`. A new attempt requires complete worker evidence and
+the outer owner's independent actual-worker death confirmation. The sudo wrapper
+exit alone cannot authorize restart. Ownership/registration failures, abnormal
+daemon exit or incomplete teardown forbid retry; prior-stage adoption after
+parent failure remains unsupported. The lower-level `Group` API does not itself
+isolate its mount namespace.
+
+The device cases exercised three standalone runtime IPC-event epochs, three
+reader-SIGKILL restart cycles, and both `partial_unmap` and `event_destroy`
+terminal-poison paths with a separate healthy pair continuing to checksum.
+Poisoned peers exited with status 1; only after complete epoch teardown did a new
+namespace accept a fresh checksum. A separate actual CLI case returned 1 from
+its first runtime-event peer and 0 from its second; the CLI automatically spent
+one restart and finished with exit zero. These are process/epoch recovery
+observations, not repair of a live poisoned mapper.
+
+All native peers in this stage used `AGNOCAST_BRIDGE_MODE=off` and
+`AGNOCAST_NO_DISCOVERY_AGENT=1`. The §35 acceptance did not exercise bridge,
+discovery-agent teardown, DDS participants, or general ROS launch processes.
+The subsequent review found privilege-boundary and failed-shutdown gaps; §36
+records the corrective revision rather than treating these historical PASS
+counts as proof that the reviewed implementation was complete.
+
+Across the verified run, **16 fresh namespaces** each began with an empty shm
+inventory. **21 adopted unlink daemons** exited naturally with status zero.
+Every worker reported `ECHILD`, and every outer owner recorded actual worker
+death and verified teardown. Each final private inventory contained one
+`cuda.shm.*` object of **81,920 bytes**; native epochs also retained the fixed
+`agnocast_type_registry` directory. This inventory is observed before the final
+worker exits. No namespace or private-shm FD escapes the worker tree, so its
+last exit releases the private mount. Namespace IDs can be reused after teardown
+and are compared for separation only while epochs are concurrently live.
+
+The host inventory was unchanged at **1,309 files / 107,233,280 bytes** before and
+after the verified suite. Module refcount was zero after tests and before normal
+unload; the recorded refcount check took 0.000147898 seconds. Test, rmmod and
+runner exits were zero, the owned module was unloaded, and all pre-existing
+socket/module/metadata preservation checks passed.
+
+Two unsuccessful preliminary trials are retained. The first used an incorrect
+native binary path: one runtime-event case passed, three native cases failed
+with three teardown errors, and no native GPU case ran. The next trial had one
+PASS and three FAIL because its oracle rejected the fixed private
+`agnocast_type_registry` directory despite complete worker/daemon teardown.
+The corrected oracle accepts only that exact directory name with a positive
+size bounded by 60 bytes; unexpected private names still fail. Both trials
+preserved the host shm inventory and normally unloaded the module. They are not
+added to the final PASS count or hidden as successful native runs.
+
+Evidence is `log/g3/isolation/verified/{assessment.json,ctest-registry.json,
+device-session.json,test_results/,peers/}`. The preliminary trials remain under
+`log/g3/isolation/{device-first,device}/`. The earlier full core baseline is
+`log/g3/completion/gate-device/`, and its CPU baseline is
+`log/g3/completion/cpu/`. Selected target results, source/core identity and
+the unrepeated baselines must not be combined into a claim that all current
+targets ran in §35.
+
+This acceptance contains the reproduced named-shm accumulation within the
+approved epoch lifetime. It does not fix CUDA runtime cleanup or measure physical
+VRAM/event/VMM residency, and unisolated execution remains outside the accepted
+boundary. No driver name was manually deleted, no device reset was performed,
+and no unlink daemon was killed. G4 Python GPU ownership, G5 performance/copy
+profiling and Orin validation remain unfinished. Finalize and Git mutation were
+not run in this stage.
+
+## Review corrections and restricted revalidation (2026-10-31 KST, §36)
+
+The review of the §34–35 diff found two privilege-boundary defects and incomplete
+failure-path coverage. The earlier §35 completion statement was too broad. This
+revision corrects the concrete defects; it does not mark every inherited LOW,
+refactoring suggestion, or future G4 requirement as resolved. The operational
+source of truth is [recovery/README.md](recovery/README.md).
+
+The canonical patch is now
+`e500ce18ffead8ad657739a3ec090ea2ca202aef540d4ec568acac52f88ac5f4`.
+It changes two core files relative to §35: cleanup context activation logs a
+numeric code without constructing an error string in a noexcept path, and the
+`make_bound` header describes ownership after a failed wait correctly. The
+patched inventory remains 23 files; zero-fuzz reconstruction matches all 140
+source files. A new isolated-process C++ case injects allocation failure while
+the cleanup worker requeues a NOT_READY event, then checks one failure/diagnostic,
+process survival, poison and retained charged ownership. Both core and probe
+were rebuilt for this revision.
+
+| Review concern | Corrective change and evidence |
+|---|---|
+| Caller-writable Python executed as root | Standalone stdlib bootstrap installed at fixed root-owned path; `python -I -B`, root-owned non-writable ancestors, no caller imports/request parsing before permanent drop, source/installed byte identity checked |
+| Requested supplementary groups and tmpfs size trusted | Bootstrap derives groups through NSS and capacity through host `statvfs`; those fields no longer occur in the privileged request interface |
+| SIGKILL escalation reported as success | Only an actually sent SIGTERM is requested termination; host regression and actual two-peer TERM→KILL test require failure/CLI 1 |
+| Worker death leaves direct peers alive | Parent-death SIGKILL plus post-prctl parent check; actual worker-only kill confirms both non-stdin-reading registered peers die; no restart |
+| Unstated bridge/discovery settings | Effective peer environment must explicitly set bridge off/discovery disabled before stage creation; rejected settings have host coverage |
+| Negative namespace behavior unmeasured | Actual CLI TERM, CLI KILL/EOF, wrapper KILL, worker KILL, KILL escalation and descendant timeout all run; synthetic peers use neither CUDA nor Agnocast |
+| Repeated wait overwrites death evidence; wait timeout loses handles | Terminal error latch preserves the first evidence; timed waits retain ownership handles; EOF close errors still wait for worker death and prohibit retry |
+| Latest Group did not exercise unpublished inventory | Native three-block publisher is explicitly SIGKILLed before publication; all six pinned resources are removed only after group death |
+| Runner optimized mode removes assert gates | `-O`/`PYTHONOPTIMIZE` is rejected before stage/artifact/module side effects |
+| G4 launch/shutdown/DDS assumptions omitted | §8 and PLAN now identify direct registered executable limits, spin-before-registration initialization, TERM/deadline/poison propagation, no registered-epoch reinitialization, and required DDS/RMW integration tests; these are not implemented G4 features |
+
+The administrator-installed helper is
+`/usr/local/libexec/rclpy-zc-gpu/namespace-bootstrap.py`; its bytes match the source
+`recovery/bootstrap.py`. No sudoers policy was changed. The system interpreter,
+standard libraries and account database are trusted. The bootstrap leaves stdin
+untouched and execs the checkout worker only after dropping UID/GID/groups and
+capabilities. The owner starts the privileged interpreter from `/`; the worker
+restores the caller working directory only after validating its unprivileged
+handoff. Worker namespaces and credentials were also checked independently through
+`/proc`, not only from self-reported JSON.
+
+| Execution | Result and scope |
+|---|---|
+| Core build / probe build | PASS / PASS |
+| First full diagnostic selection | 85 CTest targets, **347 collected = 344 PASS + 3 multi-GPU SKIP**; all passed, including transport 37 and direct Group device 4 |
+| Final recovery selection | 5 targets, **119 PASS** = Group/CLI 25 + owner 28 + worker 24 + bootstrap 30 + device 12 |
+| Latest result per registered target | 86 targets, **360 collected = 357 PASS + 3 multi-GPU SKIP**, failures/errors zero; replace the five overlapping results with the final selection, do not add both runs |
+| CPU `scripts/verify` | 12 packages, 39 targets, **584 collected = 466 PASS + 118 device opt-in SKIP**, failures/errors zero |
+| Final isolated epochs | 23: 17 native/runtime-event epochs and 6 synthetic failure-control epochs |
+| Final adopted native unlink daemons | 13, all exit 0; count may vary with daemon creation races and is not a fixed API invariant |
+| Final synthetic timeout child | Natural exit 0 after test-owned release marker; forked child observed PDEATHSIG 0; never signalled |
+| Both GPU sessions | Host CUDA shm **1,309 files / 107,233,280 bytes unchanged**, refcount 0, normal rmmod 0, existing module/sockets/metadata preserved |
+
+This is a composed latest-target coverage record, not one uninterrupted run of all
+86 targets after the final owner correction. The 85-target diagnostic suite ran
+inside its own private IPC/mount namespace using the installed bootstrap and an
+unprivileged diagnostic harness. It reported ECHILD and six naturally exited
+adopted descendants; its 97 final private shm entries stayed inside that tmpfs.
+This harness intentionally runs descendant test processes and is not the direct
+registered-peer operational supervisor. The separate 12-case namespace target
+exercises that operational supervisor. Test-driver source and complete commands
+are preserved under `log/g3/review-fixes/`.
+
+The six synthetic negative tests establish OS ownership/control behavior, not GPU
+cleanup after worker SIGKILL. Native reader crash, terminal poison, runtime IPC
+residue and unpublished-pool recovery remain separate real GPU cases. The
+expected worker-kill case has no worker-result JSON; the owner independently
+confirms death and rejects success. CLI SIGKILL has no owner/CLI result; its worker
+handles EOF and drains. The descendant-timeout case deliberately records incomplete
+teardown and denies restart before the synthetic child is released naturally.
+Thus not all 23 epochs are successful teardowns, and missing failure evidence is
+never counted as successful recovery.
+
+Failed trials are preserved. `red-owner.xml` reproduces overwritten death evidence
+and the absent timed-wait API; `red-eof-close.xml` reproduces the later EOF-close
+exception. The first six OS cases stopped at an unsupported `/proc/.../children`
+fixture query; the fixture now uses only explicitly known PID identities and the
+worker's parent chain. In the first GPU session the new unpublished test expected
+supervisor unlink after an ordinary stop, but peer cleanup had already removed
+all six names. That was an oracle/scenario mismatch: the test now kills the owned
+publisher explicitly, as required to exercise crash cleanup. The first namespace
+run was 11 PASS/1 FAIL; the final selected run supersedes it. Both sessions preserved
+external IPC and unloaded the module normally.
+
+Evidence: `log/g3/review-fixes/{assessment.json,reconstruction.json,cpu-verify.log,
+cpu/test_results/,verified/,final/,os-control/,os-control-fixed/}`. The assessment
+pins HEAD, nested fork HEAD, source/core/binary hashes, installed helper bytes,
+CUDA/driver/sudo versions and the exact source XML for every counted target.
+The original external review is preserved unchanged; a narrow read-only check of
+the corrected privilege/ownership paths found the additional EOF-close gap above,
+which was fixed and regression-tested. No new broad four-reviewer report was run.
+
+Restricted Thor G3 recovery is revalidated under the documented direct registered
+peer, bridge-off/discovery-off, private-epoch contract. General ROS launch support,
+G4 runtime shutdown and DDS/RMW integration, physical GPU residency/performance,
+Orin/CUDA 12, long-running single-epoch event accumulation and aggregate tmpfs
+quotas remain outside this validation. Older event-open VMM counter coverage,
+numeric diagnostic assertions, packaging/license metadata and structural cleanup
+proposals are not represented as closed. Finalize, commit, stage and push were
+not executed for this revision.
 
 ## Shared checkpoint and device observations
 

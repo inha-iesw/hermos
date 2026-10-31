@@ -1,8 +1,18 @@
 # Bounded GPU core repair and native Agnocast integration
 
-The repaired-core probe registers **59 CTest targets**. Execution results and
-the scope of each complete or targeted run are recorded in [EVIDENCE.md](EVIDENCE.md).
-The full G3 adoption gate remains open. Python GPU Tensor ownership (G4),
+Execution results, registered target counts and the scope of each complete or
+targeted run are recorded in [EVIDENCE.md](EVIDENCE.md). The latest implementation
+includes session tooling, failure recovery and a supervisor that creates a fresh
+private IPC/mount namespace and `/dev/shm` for every complete peer-group epoch.
+The privilege and lifecycle defects identified after §35 have been corrected
+and verified in §36. G3 is accepted for the tested Thor configuration under the
+restricted recovery contract. Current target coverage combines a full diagnostic
+run with the final recovery-target rerun; it is not one uninterrupted full-suite
+execution of the final source. EVIDENCE separates these runs and the failed trials.
+CUDA runtime IPC-event residue remains reproducible inside each private epoch;
+complete worker/descendant teardown contains it without deleting driver names.
+The [recovery README](recovery/README.md) is the authoritative operating contract.
+Python GPU Tensor ownership (G4),
 Orin validation and performance/copy profiling (G5) remain unfinished.
 The original rejection diagnostics and upstream baseline are preserved in
 [the parent README](../README.md).
@@ -14,7 +24,9 @@ The original rejection diagnostics and upstream baseline are preserved in
 every resulting source file. It neither modifies the pristine tree nor invokes
 Git. The MIT core patch is `patches/core-lifecycle.patch`, SHA256
 `e500ce18ffead8ad657739a3ec090ea2ca202aef540d4ec568acac52f88ac5f4`
-(23 core files).
+(23 patched core files, 140 reconstructed sources). Two core files changed from
+the §34–35 baseline; the corrected revision and verification are recorded in
+EVIDENCE §36.
 
 The existing CUDA VMM allocation/import, SCM_RIGHTS FD transfer and IPC event
 engine remain in use. C++ API changes require rebuilding native consumers:
@@ -41,6 +53,11 @@ four-byte GPU checksum to CPU, without staging the 64-byte payload on CPU.
 This is source and functional evidence for this path, not profiler proof.
 CPU adapter ABI 3 and the Python CPU API are unchanged.
 
+The native consumer's actual VMM mapping is read/write: the transport probe calls
+`cuMemGetAccess` on the mapped address and observes
+`CU_MEM_ACCESS_FLAGS_PROT_READWRITE` (3). Consumer read ownership is a lifetime
+contract, not hardware-enforced read-only access inherited from the CPU heap.
+
 ## Scope of the safety contract
 
 - One live producer pool epoch per process. Outstanding blocks retain their pool.
@@ -60,20 +77,28 @@ CPU adapter ABI 3 and the Python CPU API are unchanged.
 - All mapper aliases share mandatory `H` read slots and maximum message size `M`.
   A permit precedes import and remains charged through active, deferred and failed
   cleanup. Recreating a mapper cannot bypass a live epoch's limits or its shutdown seal. Strict mapping
-  keeps no idle metadata/import cache; this has an unmeasured performance cost.
+  keeps no idle metadata/import cache. Each admitted message imports the VMM
+  allocation and ready event again; retry after a real `BufferMapper::map()` bind
+  failure repeats that import. This resource-bound policy has an unmeasured cost.
 - FD replies must contain exactly one SCM_RIGHTS descriptor without `MSG_CTRUNC`.
   Invalid replies return every installed FD before CUDA context acquisition, including
   descriptors placed in ancillary alignment padding. The accepted single FD
   remains scoped through context acquisition and is closed after the import call.
   Scoped FD owners cannot be copied. A publisher EOF is diagnosed separately
-  from a failed `recvmsg`; only the latter reports `errno`.
+  from a failed `recvmsg`; only the latter reports `errno`. Failed close-on-exec
+  setup on exported, listener, request or accepted FDs closes the owned FD and
+  stops that operation. Socket cleanup unlinks only a path this server bound.
 - Completion polling can release a finished read behind a stalled read. Pool close
   claims idle blocks exclusively and refuses pending writes or retained readers.
   Healthy busy final destruction retains one draining pool without poisoning it.
   A later `initialise()` retries its close before allocating a replacement; callers
   retry while old work/readers remain. There is no background publisher reaper.
   An initialisation failure whose rollback succeeds returns the process epoch,
-  owned names and FDs; the same manager or a replacement may retry.
+  owned names and FDs; the same manager or a replacement may retry. Allocation
+  exceptions roll back before propagating to the caller. FD-server thread creation
+  failure returns false after rollback. The completion worker avoids heap allocation
+  while processing and waiting; queue creation/enqueue failure retains the charged
+  read and poisons admission instead of releasing a possibly live read.
   Failed mapping/event cleanup retains resources/references; primary-context release failure
   permanently blocks new GPU admission and retains in the process. Context pop
   failure or a mismatched popped context also disables admission. Ambiguous
@@ -88,7 +113,8 @@ CPU adapter ABI 3 and the Python CPU API are unchanged.
   Earlier names created by the failed pool are rolled back. This preserves peer
   ownership; it does not establish full cross-PID-namespace deployment support.
   SIGKILL leaves metadata/socket names.
-  Tests remove only recorded names after their known GPU peers have exited.
+  Tests and the registered-epoch supervisor remove only recorded names after
+  every owned GPU peer has exited.
 
 For manager/mapper callers the import mapping bound is at most H mappings of
 `align(M, CUDA allocation granularity)` bytes each, including retained failures.
@@ -121,9 +147,25 @@ On poison or a dead reader, stop all involved GPU peers and restart them togethe
 a live producer cannot reclaim the stranded reference. Clean only metadata and
 socket names recorded by the supervisor for those confirmed-dead peers. Do not
 glob-delete names or infer ownership from `kill(pid, 0)` in another PID namespace.
-This is an explicit restart/ownership policy, not an implemented production
-supervisor, crash collector or transparent reset. Three controlled crash/restart
-cycles preserve an unrelated pair's progress and remove only recorded test names.
+The [owned-peer recovery operating contract](recovery/README.md) owns the CLI/API
+rules, installation instructions and supported peer environment. It requires an
+administrator-installed root-owned bootstrap executed by system Python with
+`-I -B`; caller-writable checkout code is reached only after privilege drop.
+Supplementary groups come from the account database, and the bootstrap measures
+the shm capacity itself. A sudo rule must name that fixed helper, never generic
+Python or a checkout worker.
+
+The current scope is complete groups of directly executed, registered probe
+peers, each using `AGNOCAST_BRIDGE_MODE=off` and
+`AGNOCAST_NO_DISCOVERY_AGENT=1`. `IsolatedEpoch` enforces those effective
+environment values. `ros2 run/launch`, unregistered stock/G1/G2 nodes and DDS
+connectivity across the private mount are not validated integrations. Outside
+Agnocast/GPU connections are forbidden by contract; `/tmp` FD sockets are shared
+paths, not an enforced security boundary. All ownership, timeout, parent-death,
+no-adoption and restart rules are specified in the recovery README. The
+lower-level `Group` API does not provide namespace isolation by itself.
+Controlled crash/restart and namespace runs are separate evidence; their exact
+revision and execution status are in EVIDENCE.
 
 ## Reproduce
 
@@ -151,9 +193,18 @@ CMAKE_BUILD_PARALLEL_LEVEL=2 colcon --log-base log/g3/repair/probe-build build \
   --install-base install/g3/repair-probe \
   --cmake-args -DG3_REPAIRED_CORE=ON -DBUILD_TESTING=ON \
     -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CUDA_ARCHITECTURES=110
-G3_RUN_TRANSPORT=1 ctest --test-dir build/g3/repair-probe/phase4_gpu_core_probe \
+python3 phase4_gpu_core_probe/repair/session/run_device.py \
+  "$PWD/log/g3/repair-device-session" env G3_RUN_TRANSPORT=1 \
+  ctest --test-dir build/g3/repair-probe/phase4_gpu_core_probe \
+  -R '^(test_peer_recovery|test_isolated_epoch|test_namespace_worker|test_namespace_device)$' \
   --output-on-failure --no-tests=error
 ```
+
+This selects the namespace acceptance suite. Omitting `-R` runs the full diagnostic
+suite, including earlier unisolated cases that can leave host `cuda.shm.*` residue
+on the tested driver. The operational entry point is `recovery/run.py`; its
+command manifest and restart options are documented in the
+[recovery guide](recovery/README.md).
 
 The process tests require `/dev/agnocast_rclpy` and the verified ARM64
 `build/g2-device-arm64/lib/{libagnocast_heaphook.so,libagnocast.so}`. They disable
@@ -164,42 +215,60 @@ Load only the matching `agnocast_rclpy` module and unload it after all device ho
 close and its refcount reaches zero; preserve the pre-existing `agnocast` module.
 Peer exit alone is insufficient: the forked unlink daemon can retain an inherited
 device FD until its polling loop exits. Absent opt-in,
-the 32 transport cases skip; this is not an equivalent safety result.
-The nested Agnocast fork is still uncommitted; an outer checkout alone does not
-reconstruct those device artifacts.
+the actual transport and supervisor device tests skip; this is not an equivalent
+safety result.
+
+The tracked `session/run_device.py` requires an absolute, unused stage and a
+nonempty command. It verifies the artifact/source manifests before loading its
+module, waits for zero device holders before one normal unload attempt, and
+preserves test and teardown results separately. Teardown failure returns 70.
+`TMPDIR` is unique to the session and `G3_PEER_LOG_ROOT` holds peer logs outside
+pytest's temporary-directory retention. Do not set a shared global
+`PYTEST_ADDOPTS=--basetemp=...`: different pytest targets can erase each other's
+files. Session runner/protocol regressions are registered in CTest; the previous
+runner and evidence under `log/g3/post-import-review-fixes/` remain frozen.
+
+The artifact manifest still refers to the existing nested Agnocast build and source identities. The
+nested fork remains uncommitted; an outer checkout alone cannot reconstruct those
+device artifacts. Runner promotion does not close that reproducibility gap.
 
 The isolated cleanup and collision executables require exactly one selected case
 per process and return an error for an empty filter. CTest registers each filter
 explicitly; the runner regression also checks an empty XML cannot mask exit failure.
 
-## Test inventory and remaining work
+## Test inventory
 
-The table lists registered cases and their coverage. It is not a run-result
-summary; complete and targeted executions are distinguished in [EVIDENCE.md](EVIDENCE.md).
+The table lists registered test families and their coverage. It is not a
+run-result summary; counts and complete versus targeted executions are recorded
+in [EVIDENCE.md](EVIDENCE.md).
 
-| Test group | Cases | Coverage |
-|---|---:|---|
-| Metadata reservations | 7 | Exclusive generation, stale reader, overflow, dead reader and 1,000 concurrent admission races |
-| Producer lifetime | 4 | Pending cancel/prepare, active close refusal, single live pool |
-| Producer stream mismatch | 1 | Rejected preparation preserves a cancellable block without poison |
-| Pool retirement and orphan ownership | 6 | Pending prepare/cancel, last block after manager, retained reader, competing replacements and preservation of foreign metadata names |
-| Existing metadata name collision | 2 | First/second block collisions preserve the reopened inode, link count and bytes; owned earlier blocks roll back |
-| Mapper shutdown state | 3 | Shared seal visibility, moved-from close refusal and fresh epoch only after the final alias disappears |
-| Bound default/legacy lifetime | 6 | Prepare/cancel/read completion on a CUDA-unused thread, with context restoration |
-| Quarantine | 1 | Injected `cuEventRecord` failure invalidates the block and blocks 20 replacement pools after synchronization |
-| Producer context validation | 3 | Primary default allowed; per-thread/foreign contexts rejected |
-| Primary release failure | 1 | Injected driver failure blocks 20 replacements; one unresolved release attempt |
-| Dense descriptor | 6 | dtype, span, allocation, layout and overflow validation |
-| Producer cleanup faults | 11 | Event/query/context/VMM cleanup, partial allocation rollback, context pop failure/mismatch; no cleanup retry or replacement allocation |
-| Producer initialisation faults | 13 | Second-block reserve/create/map/access/FD export/event create/IPC handle/socket/bind/listen/event-context push failures; early primary retain/allocation-context push failures; rollback, names/FDs returned, context identity and call balance, replacement/same-manager retry |
-| Subscriber completion faults | 4 | Record, query, destroy, failed wait plus failed event cleanup; charged reference retention |
-| Recoverable subscriber bind faults | 2 | Completion event creation or ready wait fails; publication/ref/permit retained for successful retry and drain |
-| Subscriber context restoration | 4 | Releaser/worker pop gates and faults; no drain before restoration |
-| Isolated runner | 2 | Missing producer/subscriber case filters return failure despite valid zero-test XML |
-| FD receipt and rollback | 8 | Real Unix ancillary replies, extra/missing/truncated FD rejection, received-FD close/CLOEXEC, retain/push/import failure rollback, reference/admission return and context restoration |
-| Actual Agnocast processes | 32 | Checksum/UID, completion, cleanup, drain, crash/restart, connected receive error/EOF, malformed FD replies, producer sendmsg and post-receipt retain/push/import/granularity/reserve/map/access/bind-create/bind-wait recovery with H=1 |
-| Reused and migrated upstream core | 52 | Context, pool, publisher message, caches, manager, BufferRef, mapper, read handle and cross-process VMM; three cases require multiple GPUs |
-| Test lineage (host-only) | 15 | Base revision/hash/inventory, adapted-source ownership, required test classification and CMake registration/failure propagation |
+| Test group | Coverage |
+|---|---|
+| Metadata reservations | Exclusive generation, stale reader, overflow, dead reader and 1,000 concurrent admission races |
+| Producer lifetime | Pending cancel/prepare, active close refusal, single live pool |
+| Producer stream mismatch | Rejected preparation preserves a cancellable block without poison |
+| Pool retirement and orphan ownership | Pending prepare/cancel, last block after manager, retained reader, competing replacements and preservation of foreign metadata names |
+| Existing metadata name collision | First/second block collisions preserve the reopened inode, link count and bytes; owned earlier blocks roll back |
+| Mapper shutdown state | Shared seal visibility, moved-from close refusal and fresh epoch only after the final alias disappears |
+| Bound default/legacy lifetime | Prepare/cancel/read completion on a CUDA-unused thread, with context restoration |
+| Quarantine | Injected `cuEventRecord` failure invalidates the block and blocks 20 replacement pools after synchronization |
+| Producer context validation | Primary default allowed; per-thread/foreign contexts rejected |
+| Primary release failure | Injected driver failure blocks 20 replacements; one unresolved release attempt |
+| Dense descriptor | dtype, span, allocation, layout and overflow validation |
+| Producer cleanup faults | Event/query/context/VMM cleanup, partial allocation rollback, context pop failure/mismatch; no cleanup retry or replacement allocation |
+| Producer initialisation faults | Granularity; first/second metadata truncate/map; reserve/create/map/access/FD export/event/context failures; CLOEXEC fallback and exported/listener fcntl faults; worker thread and allocation exceptions; socket collision preservation; resource/epoch return and same-manager retry |
+| Subscriber completion faults | Record, query, destroy, failed wait plus failed event cleanup; charged reference retention |
+| Recoverable subscriber bind faults | Completion creation/wait and their context push failures preserve the synthetic publication for retry and drain |
+| Deferred queue and worker | Queue thread/heap failure retains charged reads; the worker completes and waits without heap allocation |
+| Subscriber context restoration | Releaser/worker pop gates and faults; no drain before restoration |
+| Isolated runner | Missing producer/subscriber case filters return failure despite valid zero-test XML |
+| FD receipt and rollback | Real ancillary replies, malformed FD rejection, request socket/fallback/fcntl failures, close/CLOEXEC, retain/push/import rollback and admission return |
+| Actual Agnocast processes | Checksum/UID, completion, cleanup, drain, crash/restart, receive/parser/reply errors, accepted-FD fcntl and accept errors, and post-receipt CUDA/bind recovery with H=1 |
+| Owned-peer recovery | Host lifecycle/ownership/error regressions; device unpublished-resource stop, reader-crash restart and terminal-poison exit/restart scenarios |
+| Private namespace epochs | Worker privilege/ownership and teardown regressions; runtime IPC events, reader crashes, terminal poison and actual CLI automatic restart, with independent healthy peers and unchanged host shm |
+| Session tooling (host-only) | Artifact checks, argument rejection, bounded module teardown, exit-code/JSON preservation, peer-log retention and transport statistics protocol |
+| Reused and migrated upstream core | Context, pool, publisher message, caches, manager, BufferRef, mapper, read handle and cross-process VMM; three cases require multiple GPUs |
+| Test lineage (host-only) | Base revision/hash/inventory, adapted-source ownership, required test classification and CMake registration/failure propagation |
 
 The device-independent `scripts/verify` gate does not run this GPU probe.
 
@@ -251,15 +320,37 @@ repaired tree's own `BUILD_TESTING=ON` compatible. Continue to build its core wi
 `BUILD_TESTING=OFF` and use this probe. The host-only `test_upstream_lineage` target
 checks rejection paths and actual CMake registration without loading CUDA.
 
+### Failure injection and observation limits
+
+Cleanup diagnostics use numeric errno/CUDA codes where formatting an error into
+an allocating string could throw during an already-failing `noexcept` cleanup
+path. The upstream `posix_error.hpp` helper currently has no callers; its presence
+is not a reason to reintroduce allocating error formatting in those paths.
+Numeric values and parser-detail fields are not all independently asserted by
+the current tests. A passing diagnostic-prefix check has that narrower meaning.
+
 Producer allocation/release call counts do not measure physical VRAM or driver
-resource residency. Initialisation context checks establish unchanged top-of-stack
-identity; same-primary-context push leaks are detected by push/pop call balance,
-not by identity alone. Socket/bind/listen errors are injected: the bind case creates
-no competing socket object, and the socket case does not exercise the CLOEXEC
-fallback. Socket selection counts process-wide AF_UNIX stream calls after CUDA
-warm-up; different driver/MPS behaviour in that interval needs separate validation.
-The isolated subscriber bind-failure fixtures use synthetic pointers; actual
-VMM import and bind-failure rollback are covered by the two peer cases below.
+resource residency. CUDA fault injection skips the selected real call; it tests
+the caller's handling of that error, not the driver's internal state after a real
+failure. Initialisation checks observe top-of-stack identity and push/pop call
+balance; identity alone cannot detect a repeated push of the same context.
+Intermediate failing trials include fixture/oracle corrections as well as core
+failures. A failed trial is evidence for a core change only when its failure
+actually isolates that core behavior; final PASS counts are not a count of
+independently reproduced core defects. Revision-specific trials and final runs
+remain separate in EVIDENCE.
+Metadata truncate/map injection selects successfully created owned FDs and their
+inode identity. Socket/bind/listen errors are injected; a separate real collision
+case checks preservation of an existing socket name. Dedicated cases exercise
+CLOEXEC fallback and fcntl failure. Socket selection observes process-wide AF_UNIX
+stream calls after CUDA warm-up; a different driver/MPS configuration needs its
+selection validated again. Accepted-FD fcntl faults use static-call link wrapping.
+Accept-error injection closes a real accepted FD and returns EINTR/EIO; it tests
+the server retry branch without claiming actual kernel resource exhaustion.
+The isolated subscriber bind-failure fixtures use synthetic pointers and retain
+their publication for retry. Real `BufferMapper::map()` failure destroys that
+publication; its retry imports VMM memory and the ready event again. The actual
+peer cases below cover that separate rollback and re-import path.
 The native FD-receipt fixture uses
 `/dev/null` and deliberately fails retain/push/import; it does not claim successful
 CUDA import. Its two-header sender may be coalesced into one SCM_RIGHTS array by
@@ -317,28 +408,73 @@ wait does not enqueue consumer work. Each bind case checks its operation-specifi
 CUDA error diagnostic and the generic bind failure three times. Successful retry
 checks event creation/wait before checksum; worker cleanup is observed through
 drain and context/ref balance, not the map-thread event counters. Existing
-`bad_event` coverage already tests IPC event-open rejection and successful retry.
+`bad_event` coverage tests IPC event-open rejection and successful retry; its
+operation diagnostic is now counted. It does not assert the complete VMM rollback
+counter set used by the receipt cases.
 
-The remaining matrix below identifies concrete gaps; it is not an exhaustive
-failure audit or a production recovery implementation:
+## G3 acceptance scope and remaining work
 
-| Area | Covered boundary | Remaining work |
+The review-corrected candidate passed the §36 verification for the tested Thor
+configuration under the [authoritative recovery contract](recovery/README.md).
+The final selected recovery run passed **119 cases**: 107 host and 12 device/OS
+scenarios. Combined with the earlier full diagnostic run, the latest coverage is
+**86 targets, 357 PASS + 3 multi-GPU SKIP**. This uses the final five target results
+in place of their earlier results; it is not a single full run of the final diff.
+The CPU verifier separately passed 466 cases with 118 device opt-in skips.
+See EVIDENCE §36 and `log/g3/review-fixes/assessment.json` for exact run ownership,
+source hashes, preserved failed trials and the remaining unexecuted cases.
+Finalize and Git mutations were not run for these changes.
+The original requirement remains: pool, IPC mapping/cache, FD and event resources
+must not accumulate without bound under repeated execution or crash. The selected
+execution boundary combines per-process bounds with complete private-epoch
+teardown; the unisolated diagnostic path does not satisfy that boundary.
+
+| Area | Implemented boundary | Current evidence / remaining limit |
 |---|---|---|
-| Producer allocation | 13 initialisation and 11 cleanup cases | Initial granularity query; metadata `ftruncate`/`mmap` failures; event-creation operation diagnostics |
-| FD server / request | Socket/bind/listen, receive/parser/reply failures | CLOEXEC fallback/`fcntl`, `accept`, thread creation and their rollback/diagnostics |
-| Consumer import / bind | Nine receipt retries, bad event, synthetic bind and cleanup faults | Other context, allocation/queue/thread and asynchronous CUDA failure combinations; diagnostic audit |
-| Process recovery | Controlled known-peer crash/restart | Supervisor ownership, confirmed-dead names, peer-group restart and deadlines |
+| Producer and FD paths | Granularity/metadata rollback, checked CLOEXEC, owned socket cleanup, thread/allocation exception rollback and retry tests | The §36 diagnostic run passed on the corrected core, including 37 actual transport and four direct-Group cases inside a separate private test namespace |
+| Consumer completion | Context/bind faults, charged queue failures, allocation-free completion worker and asynchronous cleanup tests | The §36 run also covers NOT_READY requeue allocation failure; injection does not model every driver failure combination |
+| Diagnostics | Operation-specific errors, nonallocating imported-resource cleanup diagnostics, parser rejection details and preserved mmap errno | Positive/negative diagnostic assertions passed; they do not cover every numeric code or parser-detail field |
+| Process recovery | Root-owned bootstrap, account-derived groups, registered direct-child ownership, parent-death termination and verified fresh-namespace restart | Final host tests and 12 device/OS scenarios cover restart and refusal paths; synthetic failure controls do not claim native CUDA daemon behavior on worker death |
+| Resource containment | Per-epoch private IPC/mount namespace and tmpfs, complete teardown before retry | Final 23 isolated epochs include six non-GPU failure controls; 13 native unlink daemons exited zero, and a separate synthetic timeout child exited zero after release |
 
-Device-session `metadata_preserved` covers only `rclpy_zc_gpu_v1_*`. Review runs
-observed `/dev/shm/cuda.shm.*` objects remaining after publisher exit; those driver
-objects are outside that preservation check. Later sessions record their file
-count and bytes separately and do not delete them. Safe deletion conditions and
-driver behavior on PID/name reuse remain unresolved.
+Device-session `metadata_preserved` covers only `rclpy_zc_gpu_v1_*`.
+`cuda.shm.*` objects are outside that preservation check. The standalone
+[CUDA event probe](residency/event_probe.py) reproduces residue after explicit
+runtime IPC-event destruction and process exit, without Agnocast, heaphook or the
+repaired core. Runtime-only IPC events reproduce it, so mixing runtime and driver
+APIs is not a necessary condition. Pure-driver event and
+[VMM allocation/import probes](residency/vmm_probe.cpp) did not add these objects
+in the tested sequences. These observations narrow the reproducer; they do not
+establish physical GPU residency or prove all full-suite residue has one cause.
 
-G3 remains open. This matrix covers the listed cleanup paths, not every allocation,
-event-creation, FD/system-call or asynchronous CUDA failure. Remaining work includes
-the production supervisor and recorded-name recovery procedure, remaining failure combinations, and a complete
-operation-specific diagnostic audit. Current FD/metadata counts do not establish
-physical VRAM/event/VMM accounting or copy profiling. G4 still needs the Python GPU
-provider, Tensor aliases and framework-stream lifetime tests. Orin/CUDA 12,
-native Ubuntu 24.04/Jazzy, performance/copy trace and G5 remain unverified.
+Inventories and mode-level results are recorded in EVIDENCE and the
+[residency diagnostic guide](residency/README.md). Successful setup established
+empty private shm. In completed GPU epochs, runtime-event objects and the Agnocast type
+registry remained private until the final holder exited; the kernel then releases
+that mount. Both §36 GPU sessions preserved the host inventory of 1,309 CUDA shm
+objects / 107,233,280 bytes and unloaded the test module normally at refcount zero.
+No driver object was manually deleted,
+no device reset was used and no unlink daemon was killed. Namespace IDs can be
+reused after destruction; identity alone is not proof that an old epoch remains.
+
+The unpublished three-block inventory is now tested through explicit publisher
+SIGKILL and complete group cleanup. Short epochs still do not establish a
+long-running epoch or general event/block-count residue bound. The per-epoch tmpfs limit is not a global budget for
+concurrent groups. Worker death can leave incomplete cleanup evidence and shared
+socket names; parent-death termination is not persistent crash adoption.
+
+These G3 results do not establish physical VRAM/event/VMM accounting, repair
+CUDA's internal cleanup, or provide copy profiling. G4 still needs the
+Python GPU provider, Tensor aliases and framework-stream lifetime tests. G5 owns
+performance, bridge/copy trace and separate Orin/JetPack 6 and Thor/JetPack 7
+assessment; Orin/CUDA 12 and native Ubuntu 24.04/Jazzy remain unverified. Their
+scope is separate from the current native G3 candidate and does not waive its
+resource-lifetime or recovery requirements.
+
+G4 must connect runtime initialization/registration, TERM shutdown deadlines,
+mapper/producer/CUDA shutdown order and asynchronous poison exit to the supervisor
+contract. The current probe TERM path does not prove orderly Python runtime
+shutdown. General ROS launch and inside/outside-epoch DDS with both RMWs remain
+integration gates, as described in the recovery README.
+The remaining LOW coverage/documentation items and optional design/refactoring
+proposals are not all closed by this correction; EVIDENCE records their disposition.

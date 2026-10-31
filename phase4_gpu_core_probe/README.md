@@ -2,11 +2,19 @@
 
 The pinned `ros2_cuda_ipc` candidate is **rejected for unmodified G3 adoption**.
 The ordinary C++ GPU fanout works, but the candidate can reissue a GPU pointer
-while an earlier producer write is still pending. A separate
-[bounded repair and native Agnocast experiment](repair/README.md) now passes
-43 safety/integration cases; six reused upstream targets add 30 passes and three
-multi-GPU skips. The latest repair fixes teardown poisoning and cross-thread
-default-stream cleanup. Full G3 adoption and the Python GPU API remain open.
+while an earlier producer write is still pending. This page preserves that
+upstream rejection history and its reproduction commands. The separate
+[bounded repair and native Agnocast experiment](repair/README.md) owns the current
+repair contract and remaining gates; its [evidence history](repair/EVIDENCE.md)
+records each tested revision and run scope. The privilege and lifecycle defects
+identified after §35 have been corrected and verified in §36. G3 is accepted for
+the tested Thor configuration under the restricted
+[recovery operating contract](repair/recovery/README.md): the administrator-installed
+bootstrap, required peer environment and complete registered group in a private
+IPC/mount namespace. The repeated-epoch tests preserved host shared memory.
+That result does not repair CUDA's internal cleanup, measure physical GPU
+residency, or establish support for general ROS launch configurations.
+The Python GPU API and performance/Orin validation remain separate unfinished work.
 The default build below preserves the original rejection diagnostics;
 `G3_REPAIRED_CORE=ON` selects the repaired experiment in a separate build tree.
 
