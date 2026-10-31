@@ -252,6 +252,11 @@ target_link_options(g3_cleanup_peer PRIVATE "-Wl,--wrap=fcntl"
   "-Wl,--export-dynamic-symbol=accept")
 include(session/register.cmake)
 
+# Opt-in driver residency diagnostic; it does not define an adoption PASS test.
+add_executable(g3_vmm_residency residency/vmm_probe.cpp)
+target_compile_features(g3_vmm_residency PRIVATE cxx_std_17)
+target_link_libraries(g3_vmm_residency CUDA::cuda_driver)
+
 target_link_options(test_subscriber_cleanup PRIVATE
   "-Wl,--export-dynamic-symbol=pthread_cond_wait")
 set(_test "subscriber_cleanup_WorkerAllocation")
