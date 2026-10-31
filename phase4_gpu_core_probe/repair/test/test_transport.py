@@ -6,6 +6,7 @@ import queue
 import signal
 import socket
 import subprocess
+import tempfile
 import threading
 import time
 
@@ -99,6 +100,13 @@ class Peer:
 def peers(tmp_path):
     binary = Path(os.environ['G3_TRANSPORT_PEER'])
     active = []
+    # A later pytest process may prune tmp_path even within the same CTest run.
+    # Session evidence lives outside pytest's numbered temporary directories.
+    if 'G3_PEER_LOG_ROOT' in os.environ:
+        log_root = Path(os.environ['G3_PEER_LOG_ROOT'])
+        if not log_root.is_absolute():
+            raise ValueError('G3_PEER_LOG_ROOT must be absolute')
+        tmp_path = Path(tempfile.mkdtemp(prefix=tmp_path.name + '-', dir=log_root))
 
     def start(blocks=1, reads=1, fault=None, reply_fault=None):
         topic = f'/g3_repair_{os.getpid()}_{time.monotonic_ns()}'

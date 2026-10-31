@@ -250,6 +250,8 @@ endforeach()
 target_link_options(test_fd_receive PRIVATE "-Wl,--wrap=socket" "-Wl,--wrap=fcntl")
 target_link_options(g3_cleanup_peer PRIVATE "-Wl,--wrap=fcntl"
   "-Wl,--export-dynamic-symbol=accept")
+include(session/register.cmake)
+
 target_link_options(test_subscriber_cleanup PRIVATE
   "-Wl,--export-dynamic-symbol=pthread_cond_wait")
 set(_test "subscriber_cleanup_WorkerAllocation")
