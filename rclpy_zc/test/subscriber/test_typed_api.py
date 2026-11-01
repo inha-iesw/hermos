@@ -156,3 +156,33 @@ def test_runtime_passes_all_limits_and_group_under_lifecycle_lock(monkeypatch):
     finally:
         runtime._subscriptions.clear()
         runtime.close()
+
+
+@pytest.mark.parametrize('kind', ['publisher', 'subscription'])
+def test_gpu_factory_requires_explicit_runtime_before_creating_native_endpoint(monkeypatch, kind):
+    import sys
+    from rclpy_agnocast import types
+
+    runtime = make_runtime()
+    monkeypatch.setattr(types, 'resolve_adapter',
+                        lambda _: {'ros_type': 'rclpy_agnocast_gpu_msgs/msg/GpuTensor'})
+
+    def current():
+        raise RuntimeError('GpuRuntime must be explicitly initialised first')
+
+    monkeypatch.setitem(sys.modules, 'rclpy_agnocast_gpu.runtime',
+                        SimpleNamespace(current_runtime=current))
+    monkeypatch.setitem(sys.modules, 'rclpy_agnocast_gpu.endpoint.publisher',
+                        SimpleNamespace(TensorPublisher=object))
+    monkeypatch.setitem(sys.modules, 'rclpy_agnocast_gpu.endpoint.subscription',
+                        SimpleNamespace(TensorSubscription=object))
+    runtime._native_runtime.create_typed_publisher = lambda *args: pytest.fail('created publisher')
+    runtime._native_runtime.create_typed_subscription = lambda *args: pytest.fail('created subscriber')
+    with pytest.raises(RuntimeError, match='explicitly initialised'):
+        if kind == 'publisher':
+            runtime.create_typed_publisher(object(), '/gpu', depth=1, max_storage_bytes=4096)
+        else:
+            runtime.create_typed_subscription(object(), '/gpu', lambda _: None, depth=1,
+                                               limits=SubscriptionLimits(1, 4096, 4096))
+    assert runtime._subscriptions == set()
+    runtime.close()

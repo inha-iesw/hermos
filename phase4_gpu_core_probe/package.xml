@@ -15,6 +15,7 @@
   <test_depend>rclcpp</test_depend>
   <test_depend>std_msgs</test_depend>
   <test_depend>rclpy_agnocast_gpu_msgs</test_depend>
+  <test_depend>rclpy_agnocast_gpu</test_depend>
   <test_depend>agnocastlib</test_depend>
   <export><build_type>ament_cmake</build_type></export>
 </package>

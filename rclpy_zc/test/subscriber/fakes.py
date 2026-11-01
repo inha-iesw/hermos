@@ -55,8 +55,10 @@ def runtime_for_test(native_runtime, node):
     """Build an unregistered runtime; the calling test owns patching and cleanup."""
     runtime = AgnocastRuntime.__new__(AgnocastRuntime)
     runtime._closed = False
+    runtime._closing = False
     runtime._native_runtime = native_runtime
     runtime._rclpy_node = node
     runtime._lifecycle_lock = RLock()
     runtime._subscriptions = set()
+    runtime._gpu_publishers = set()
     return runtime

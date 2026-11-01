@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>rclpy_agnocast_gpu</name>
+  <version>0.1.0</version>
+  <description>Stream-bound CUDA Tensor ownership for the Agnocast Python adapter.</description>
+  <maintainer email="maintainers@example.com">rclpy zerocopy maintainers</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <build_depend>rclpy_agnocast_codegen</build_depend>
+  <build_depend>python3-dev</build_depend>
+  <build_depend>pybind11_vendor</build_depend>
+  <depend>rclpy_agnocast</depend>
+  <depend>rclpy_agnocast_gpu_msgs</depend>
+  <depend>ros2_cuda_ipc_core</depend>
+  <exec_depend>rclpy</exec_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>std_msgs</test_depend>
+  <test_depend>std_srvs</test_depend>
+  <test_depend>rcl_interfaces</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

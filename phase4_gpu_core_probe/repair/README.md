@@ -174,6 +174,10 @@ by the user; the tested Docker user space is Ubuntu **22.04.5**, ROS Humble,
 Python 3.10.12, CUDA 13.2.86/driver 595.78 and Torch 2.13.0+cu132. The GPU is
 Thor, capability 11.0, with kernel 6.8.12-1021-tegra/L4T R39.2.1. Architecture 110
 below is specific to this observed configuration; it is not an Orin setting.
+The existing CPU adapter must already be installed in `install/`. Build order is
+repaired core/messages → G4 adapter → G3 probe: the probe consumes the public
+descriptor validator installed by `rclpy_agnocast_gpu`, and G4 interoperability
+tests then consume the probe executable. The core build itself does not need G4.
 
 ```bash
 mkdir -p log/g3
@@ -188,6 +192,11 @@ CMAKE_BUILD_PARALLEL_LEVEL=2 colcon --log-base log/g3/repair/core-build build \
   --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Debug
 source install/setup.bash
 source install/g3/repaired/setup.bash
+CMAKE_BUILD_PARALLEL_LEVEL=2 colcon --log-base log/g4/adapter-build build \
+  --packages-select rclpy_agnocast_gpu \
+  --build-base build/g4 --install-base install/g4 --symlink-install \
+  --cmake-args -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Debug
+source install/g4/setup.bash
 CMAKE_BUILD_PARALLEL_LEVEL=2 colcon --log-base log/g3/repair/probe-build build \
   --base-paths phase4_gpu_core_probe --build-base build/g3/repair-probe \
   --install-base install/g3/repair-probe \

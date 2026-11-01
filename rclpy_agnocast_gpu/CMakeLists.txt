@@ -1,0 +1,52 @@
+cmake_minimum_required(VERSION 3.18)
+project(rclpy_agnocast_gpu)
+
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+find_package(rclpy_agnocast_codegen REQUIRED)
+find_package(rclpy_agnocast_gpu_msgs REQUIRED)
+find_package(ros2_cuda_ipc_core REQUIRED)
+find_package(CUDAToolkit REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
+find_package(pybind11_vendor REQUIRED)
+find_package(pybind11 CONFIG REQUIRED)
+
+ament_python_install_package(${PROJECT_NAME})
+rclpy_agnocast_generate_adapters(_types TYPES rclpy_agnocast_gpu_msgs/msg/GpuTensor)
+
+# Only this module links the static CUDA core: its process registries must be unique.
+pybind11_add_module(_native MODULE
+  src/runtime/runtime.cpp src/runtime/bindings.cpp src/tensor/owner.cpp src/tensor/export.cpp)
+target_compile_features(_native PRIVATE cxx_std_17)
+target_compile_options(_native PRIVATE -Wall -Wextra -Wpedantic)
+target_include_directories(_native PRIVATE include src third_party/dlpack)
+target_link_libraries(_native PRIVATE
+  ros2_cuda_ipc_core::ros2_cuda_ipc_core CUDA::cuda_driver
+  ${rclpy_agnocast_gpu_msgs_TARGETS__rosidl_generator_cpp})
+ament_get_python_install_dir(PYTHON_INSTALL_DIR)
+install(TARGETS _native LIBRARY DESTINATION "${PYTHON_INSTALL_DIR}/${PROJECT_NAME}")
+install(DIRECTORY include/ DESTINATION include)
+install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
+install(FILES third_party/dlpack/LICENSE DESTINATION share/${PROJECT_NAME}/third_party/dlpack)
+ament_export_include_directories(include)
+ament_export_dependencies(rclpy_agnocast_gpu_msgs)
+
+if(BUILD_TESTING)
+  target_sources(_native PRIVATE test/runtime/bind_gate.cpp)
+  target_compile_definitions(_native PRIVATE BUILD_TESTING)
+  add_library(g4_query_failure SHARED test/runtime/query_failure.cpp)
+  target_link_libraries(g4_query_failure PRIVATE CUDA::cuda_driver ${CMAKE_DL_LIBS})
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_gtest(test_gpu_descriptor test/runtime/test_descriptor.cpp)
+  target_compile_features(test_gpu_descriptor PRIVATE cxx_std_17)
+  target_include_directories(test_gpu_descriptor PRIVATE include)
+  target_link_libraries(test_gpu_descriptor ${rclpy_agnocast_gpu_msgs_TARGETS__rosidl_generator_cpp})
+  ament_add_pytest_test(test_gpu_api test/api TIMEOUT 120)
+  ament_add_pytest_test(test_gpu_launch test/runtime/test_launch.py TIMEOUT 30)
+  ament_add_pytest_test(test_gpu_async_shutdown test/runtime/test_async_shutdown.py TIMEOUT 30)
+  ament_add_pytest_test(test_gpu_integration test/integration TIMEOUT 300
+    APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/../phase4_gpu_core_probe/repair/recovery:${CMAKE_CURRENT_SOURCE_DIR}/test/integration")
+  set_tests_properties(test_gpu_integration PROPERTIES LABELS "cuda;requires_kernel_module")
+endif()
+ament_package()

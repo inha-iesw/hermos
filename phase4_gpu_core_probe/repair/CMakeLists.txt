@@ -76,6 +76,8 @@ target_compile_definitions(test_upstream_vmm_fd_memory_driver PRIVATE
 add_dependencies(test_upstream_vmm_fd_memory_driver g3_vmm_fd_import_helper)
 
 find_package(rclpy_agnocast_gpu_msgs REQUIRED)
+find_package(rclpy_agnocast_gpu REQUIRED)
+include_directories(${rclpy_agnocast_gpu_INCLUDE_DIRS})
 find_package(agnocastlib REQUIRED)
 find_package(rclcpp REQUIRED)
 
