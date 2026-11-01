@@ -60,7 +60,9 @@ py::object read(const RootOwner & root, const FieldPath & path, std::uint64_t ge
   }
   throw py::type_error("unknown scalar category");
 }
-void write(RootOwner & root, const FieldPath & path, std::uint64_t generation, py::handle input)
+void write(
+  RootOwner & root, const FieldPath & path, std::uint64_t generation, py::handle input,
+  bool on_worker)
 {
   const auto info = root.info(path, generation);
   if (info.ops->kind != FieldKind::kScalar) {
@@ -100,7 +102,12 @@ void write(RootOwner & root, const FieldPath & path, std::uint64_t generation, p
       }
       break;
   }
-  root.write(path, generation, value);
+  if (on_worker) {
+    py::gil_scoped_release release;
+    root.write_on_worker(path, generation, value);
+  } else {
+    root.write(path, generation, value);
+  }
 }
 }  // namespace
 
@@ -125,7 +132,10 @@ void bind_root(py::module_ & module)
     "text_bytes", [](const RootOwner & root, const FieldPath & path, std::uint64_t generation) {
       return py::bytes(root.text_bytes(path, generation));
     })
-  .def("write", &write)
+  .def("write", [](RootOwner & root, const FieldPath & path,
+    std::uint64_t generation, py::handle value) {write(root, path, generation, value, false);})
+  .def("_write_on_worker", [](RootOwner & root, const FieldPath & path,
+    std::uint64_t generation, py::handle value) {write(root, path, generation, value, true);})
   .def(
     "resize", [](RootOwner & root, const FieldPath & path, std::uint64_t generation,
     std::size_t size) {

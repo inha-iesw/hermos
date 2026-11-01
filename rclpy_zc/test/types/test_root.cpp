@@ -46,6 +46,7 @@ struct Trace
 {
   Message * live{nullptr};
   std::thread::id worker_thread;
+  std::thread::id scalar_write_thread;
   std::thread::id allocation_thread;
   std::thread::id deallocation_thread;
   std::thread::id root_destroy_thread;
@@ -134,6 +135,16 @@ struct Message
 
 const TypeDescriptor & descriptor()
 {
+  static const auto observed_scalar = [] {
+      auto ops = *scalar_ops<std::int32_t>();
+      ops.write = [](rclpy_agnocast::types::FieldRef ref, ScalarValue value) noexcept {
+          if (allocator_trace) {
+            allocator_trace->scalar_write_thread = std::this_thread::get_id();
+          }
+          return scalar_ops<std::int32_t>()->write(ref, value);
+        };
+      return ops;
+    }();
   static const auto bytes = sequence_ops<Bytes>(scalar_ops<std::uint8_t>(), 16);
   static const FieldMember child_members[] = {
     {"bytes", &bytes, [] (void * root) noexcept->void * {
@@ -149,7 +160,7 @@ const TypeDescriptor & descriptor()
   static const auto tracked_text = string_ops<Text>();
   static const auto tracked_wide_text = string_ops<WideText>();
   static const FieldMember members[] = {
-    {"scalar", scalar_ops<std::int32_t>(), [] (void * root) noexcept->void * {
+    {"scalar", &observed_scalar, [] (void * root) noexcept->void * {
         return std::addressof(static_cast<Message *>(root)->scalar);
       }},
     {"values", &values, [] (void * root) noexcept->void * {
@@ -304,6 +315,21 @@ TEST_F(TypedRoot, FirstScalarWriteRejectsResizeBeforeChangingPointerLengthOrGene
   EXPECT_EQ(1U, trace->publishes);
   EXPECT_THROW(owner->info({}, generation()), std::runtime_error);
   EXPECT_THROW(owner->publish(kPublisher), std::runtime_error);
+}
+
+TEST_F(TypedRoot, DescriptorScalarWriteRunsOnWorkerAndRetainsWriteBarrier)
+{
+  owner = borrow();
+  ScalarValue value{};
+  value.signed_integer = 73;
+  owner->write_on_worker({0}, generation(), value);
+  EXPECT_EQ(trace->worker_thread, trace->scalar_write_thread);
+  EXPECT_NE(std::this_thread::get_id(), trace->scalar_write_thread);
+  EXPECT_EQ(73, trace->live->scalar);
+  EXPECT_EQ(RootPhase::kFilling, owner->snapshot().phase);
+  EXPECT_THROW(owner->resize({1}, generation(), 1), BufferBusy);
+  owner->publish(kPublisher);
+  EXPECT_THROW(owner->write_on_worker({0}, generation(), value), std::runtime_error);
 }
 
 TEST_F(TypedRoot, BufferExportBlocksPublishAndPermanentlyClosesTheResizePhase)

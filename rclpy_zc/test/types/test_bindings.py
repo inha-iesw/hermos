@@ -261,3 +261,20 @@ def test_runtime_routes_resolved_type_and_checks_closed_before_native(endpoints,
         assert len(requested) == 1
     finally:
         runtime._closed = True
+
+
+def test_worker_scalar_write_preserves_type_and_terminal_checks(endpoints):
+    publisher, handle = endpoints()
+    with publisher.borrow_message() as message:
+        owner = message._owner
+        fields = owner.info((), 0)['members']
+        signed = (fields.index('signed'),)
+        with pytest.raises(ValueError):
+            owner._write_on_worker(signed, 0, 1 << 40)
+        assert owner.snapshot['phase'] == 'PREPARE'
+        owner._write_on_worker(signed, 0, 123)
+        assert message.signed == handle.inspect()['signed'] == 123
+        assert owner.snapshot['phase'] == 'FILLING'
+        publisher.publish(message)
+        with pytest.raises(RuntimeError):
+            owner._write_on_worker(signed, 0, 456)

@@ -54,6 +54,8 @@ public:
   ScalarValue read(const FieldPath & path, std::uint64_t generation) const;
   std::string text_bytes(const FieldPath & path, std::uint64_t generation) const;
   void write(const FieldPath & path, std::uint64_t generation, ScalarValue value);
+  // Descriptor metadata uses the same worker as borrow/resize/publication.
+  void write_on_worker(const FieldPath & path, std::uint64_t generation, ScalarValue value);
   void resize(const FieldPath & path, std::uint64_t generation, std::size_t size);
   BufferSpan acquire_export(const FieldPath & path, std::uint64_t generation);
   void release_export() noexcept;

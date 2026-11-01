@@ -135,6 +135,21 @@ void RootOwner::write(const FieldPath & path, std::uint64_t generation, ScalarVa
   check_status(ref.ops->write(ref, value));
   structure_phase_ = RootPhase::kFilling;
 }
+void RootOwner::write_on_worker(
+  const FieldPath & path, std::uint64_t generation, ScalarValue value)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  const auto ref = resolve(path, generation);
+  if (!ref.ops->write) {throw std::invalid_argument("field is not a scalar");}
+  struct Task {FieldRef ref; ScalarValue value;};
+  Task task{ref, value};
+  check_worker(worker_->operate(
+      publisher_id_, loan_generation_, [](void * raw) {
+        auto & task = *static_cast<Task *>(raw);
+        check_status(task.ref.ops->write(task.ref, task.value));
+      }, &task));
+  structure_phase_ = RootPhase::kFilling;
+}
 std::size_t RootOwner::account() const
 {
   std::size_t dynamic = 0;
