@@ -81,6 +81,42 @@ def harness(tmp_path, monkeypatch):
     rclpy.shutdown(context=context)
 
 
+@pytest.mark.parametrize('fail_first', [False, True])
+def test_message_hook_wraps_under_lock_and_rearms_after_failure(harness, monkeypatch, fail_first):
+    failure = ValueError('specialized message conversion failed')
+    attempts = []
+    seen = []
+
+    class SpecializedSubscription(TypedSubscription):
+        def _make_message(self, owner):
+            assert self._state_lock.locked()
+            attempts.append(True)
+            if fail_first and len(attempts) == 1:
+                raise failure
+            return 'specialized', super()._make_message(owner)
+
+    monkeypatch.setitem(globals(), 'TypedSubscription', SpecializedSubscription)
+
+    def callback(wrapped):
+        kind, message = wrapped
+        seen.append((kind, message.signed))
+        with pytest.raises(TypeError, match='read.only'):
+            message.signed = 0
+
+    subscription, handle, executor = harness.create(callback)
+    assert handle.push(17)
+    if fail_first:
+        with pytest.raises(ValueError) as caught:
+            spin_until(executor, lambda: bool(seen))
+        assert caught.value is failure
+        assert subscription._dispatching == 0
+        assert handle.stats.outstanding_leases == 0
+        assert handle.push(17)
+    spin_until(executor, lambda: bool(seen) and subscription._dispatching == 0)
+    assert seen == [('specialized', 17)]
+    assert handle.stats.outstanding_leases == 0
+
+
 def test_waitable_owns_one_guard_and_preserves_nested_alias_budget(harness):
     fields = []
     seen = []

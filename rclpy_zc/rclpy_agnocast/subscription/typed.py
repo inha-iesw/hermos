@@ -69,6 +69,15 @@ class TypedSubscription(Subscription):
                 discard_notifier(self)
             raise
 
+    def _make_message(self, owner):
+        """Wrap one native root while ``_take`` holds the non-reentrant state lock.
+
+        Specialized adapters may override this hook. Do not reenter endpoint
+        lifecycle methods. A raised exception is dispatched without incrementing
+        the active-callback count, and ``finish_dispatch`` still rearms delivery.
+        """
+        return Message(owner, readonly=True)
+
     def _take(self):
         with self._state_lock:
             if self._closing:
@@ -79,7 +88,7 @@ class TypedSubscription(Subscription):
                 owner = self._handle.take()
                 if owner is None:
                     return [None, None]
-                message = Message(owner, readonly=True)
+                message = self._make_message(owner)
                 self._dispatching += 1
                 return [message, None]
             except BaseException as error:
