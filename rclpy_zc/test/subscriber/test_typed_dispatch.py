@@ -2,7 +2,7 @@
 
 import gc
 import os
-from threading import Event, RLock, Thread
+from threading import Event, Thread
 import time
 from types import SimpleNamespace
 
@@ -14,8 +14,8 @@ from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.task import Future
 
 from rclpy_agnocast import _native
-from rclpy_agnocast.runtime import AgnocastRuntime
 from rclpy_agnocast.subscription.typed import TypedSubscription
+from subscriber.fakes import runtime_for_test
 
 
 def spin_until(executor, predicate):
@@ -31,11 +31,7 @@ def harness(tmp_path, monkeypatch):
     context = Context()
     rclpy.init(context=context)
     node = rclpy.create_node(f'typed_{os.getpid()}', context=context)
-    owner = AgnocastRuntime.__new__(AgnocastRuntime)
-    owner._rclpy_node = node
-    owner._subscriptions = set()
-    owner._lifecycle_lock = RLock()
-    owner._closed = False
+    owner = runtime_for_test(None, node)
 
     def prepare_close():
         owner._native_runtime.state = _native.RuntimeState.QUIESCING

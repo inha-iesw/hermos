@@ -127,7 +127,8 @@ if(BUILD_TESTING)
   add_dependencies(test_provider_lifetime test_type_provider)
   ament_add_pytest_test(test_type_discovery test/types/test_discovery.py TIMEOUT 60)
   ament_add_pytest_test(test_type_native_abi test/types/test_native_abi.py TIMEOUT 60)
-  ament_add_pytest_test(test_type_bindings test/types/test_bindings.py TIMEOUT 60)
+  ament_add_pytest_test(test_type_bindings test/types/test_bindings.py TIMEOUT 60
+    APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test")
   ament_add_pytest_test(test_type_lease_bindings test/types/test_lease_bindings.py TIMEOUT 60)
   ament_add_pytest_test(test_cpu_tensor test/tensor/test_cpu_tensor.py TIMEOUT 120)
   ament_add_pytest_test(test_cpu_tensor_readonly test/tensor/test_readonly.py TIMEOUT 120)
@@ -138,9 +139,10 @@ if(BUILD_TESTING)
   set_tests_properties(test_cpu_tensor_system PROPERTIES
     LABELS "pytest;system;requires_kernel_module;requires_heaphook")
   ament_add_pytest_test(test_compat_node test/compat/test_node.py TIMEOUT 60)
-  ament_add_pytest_test(test_typed_subscriber_api test/subscriber/test_typed_api.py TIMEOUT 60)
+  ament_add_pytest_test(test_typed_subscriber_api test/subscriber/test_typed_api.py TIMEOUT 60
+    APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test")
   ament_add_pytest_test(test_typed_subscriber_dispatch test/subscriber/test_typed_dispatch.py
-    TIMEOUT 120)
+    TIMEOUT 120 APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test")
 
   target_compile_definitions(rclpy_agnocast_core PUBLIC BUILD_TESTING)
   target_sources(rclpy_agnocast_core PRIVATE src/publisher/observation.cpp)

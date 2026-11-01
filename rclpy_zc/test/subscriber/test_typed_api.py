@@ -7,10 +7,10 @@ from types import SimpleNamespace
 import pytest
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
-from rclpy_agnocast import runtime as runtime_module
 from rclpy_agnocast.subscription.limits import SubscriptionLimits
 from rclpy_agnocast.types.message import Message
 from rclpy_agnocast.types.publisher import TypedPublisher
+from subscriber.fakes import runtime_for_test
 
 
 @pytest.mark.parametrize('field', [
@@ -74,16 +74,11 @@ def test_publisher_rejects_received_root_before_native_owner_access():
 
 
 def make_runtime():
-    runtime = runtime_module.AgnocastRuntime.__new__(runtime_module.AgnocastRuntime)
-    runtime._closed = False
-    runtime._lifecycle_lock = RLock()
-    runtime._subscriptions = set()
-    runtime._rclpy_node = SimpleNamespace(
+    node = SimpleNamespace(
         get_name=lambda: 'typed', context=SimpleNamespace(ok=lambda: True),
         add_waitable=lambda waitable: None, remove_waitable=lambda waitable: None,
         default_callback_group=MutuallyExclusiveCallbackGroup())
-    runtime._native_runtime = SimpleNamespace(close=lambda: None)
-    return runtime
+    return runtime_for_test(SimpleNamespace(close=lambda: None), node)
 
 
 @pytest.mark.parametrize('change,error', [
