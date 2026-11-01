@@ -200,14 +200,19 @@ period can reject otherwise normal cleanup; the tested default is five seconds.
 A teardown timeout means incomplete cleanup and never permission to restart;
 an observation-only `wait(timeout=...)` leaves the epoch running and owned.
 
-G4 must connect TERM to runtime shutdown, choose a peer shutdown deadline shorter
-than the supervisor's TERM wait with scheduling margin, and own the ordering
-dispatch stop → mapper seal/drain → producer close → CUDA teardown. It must
-propagate asynchronous terminal poison to a nonzero process exit, reject pool
-reinitialisation after registration, and finish explicit GPU runtime setup and
-registration before spin. The probe's default TERM exit does not validate that
-future Python/runtime sequence. Resource-free launchers, general ROS launch and
-inside/outside-epoch DDS tests for both RMWs remain G4 integration work.
+The [G4 Python launcher](../../../rclpy_agnocast_gpu/README.md) connects TERM to
+dispatch stop → mapper seal/drain → producer close → CUDA teardown. Its peer
+deadline is three seconds with the tested five-second supervisor TERM budget.
+Terminal poison becomes a nonzero peer exit even without callbacks; one explicit
+GPU runtime setup and registration precedes spin, and reinitialisation is rejected.
+Its actual Tensor/async shutdown and inside/outside-epoch DDS tests are recorded in
+[G4 EVIDENCE](../../../rclpy_agnocast_gpu/EVIDENCE.md). Fast DDS across separate shm
+mounts needs the explicitly selected profile documented there.
+
+This supervisor remains source-tree-only. Its installable package boundary must
+be decided and revalidated before a release that runs without this source tree.
+Resource-free registered launchers and general ROS launch remain unsupported;
+the root-owned bootstrap must not move into a caller-writable colcon install.
 
 Runtime IPC events leave driver-owned objects on the tested CUDA combination;
 see [the standalone diagnostics](../residency/README.md). They and the fixed
