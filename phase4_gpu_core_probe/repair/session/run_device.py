@@ -12,6 +12,13 @@ import time
 if sys.flags.optimize:
     raise SystemExit('device runner requires Python assertions; remove -O/PYTHONOPTIMIZE')
 
+
+def preexisting_module_version():
+    """Snapshot the unrelated module, preserving absence as a valid baseline."""
+    module = Path('/sys/module/agnocast')
+    return (module / 'srcversion').read_text().strip() if module.exists() else None
+
+
 if len(sys.argv) < 3 or not Path(sys.argv[1]).is_absolute() or not sys.argv[2]:
     raise ValueError('expected an absolute stage path followed by a nonempty command')
 root = Path(__file__).resolve().parents[3]
@@ -36,9 +43,11 @@ for name, entry in manifest['artifacts'].items():
     assert int.from_bytes(data[18:20], 'little') == entry['elf_machine'], name
     record['verified_artifacts'][name] = actual
 sources = json.loads((artifact_root / 'source-before.json').read_text())
+record['agnocast_srcversion'] = preexisting_module_version()
 for name, expected in sources.items():
     if name == 'loaded_agnocast_srcversion':
-        assert Path('/sys/module/agnocast/srcversion').read_text().strip() == expected
+        if record['agnocast_srcversion'] is not None:
+            assert record['agnocast_srcversion'] == expected
     else:
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == expected, name
 record['source_identity_files'] = len(sources) - 1
@@ -51,7 +60,6 @@ assert record['kernel'] == manifest['kernel']
 assert os.uname().machine == manifest['architecture']
 assert not Path('/sys/module/agnocast_rclpy').exists()
 assert not Path('/dev/agnocast_rclpy').exists()
-record['agnocast_srcversion'] = Path('/sys/module/agnocast/srcversion').read_text().strip()
 record['sockets_before'] = sorted(str(p) for p in Path('/tmp').glob('cuda_memory_pool_*.sock'))
 record['metadata_before'] = sorted(str(p) for p in Path('/dev/shm').glob('rclpy_zc_gpu_v1_*'))
 cuda_shm = list(Path('/dev/shm').glob('cuda.shm.*'))
@@ -95,8 +103,9 @@ finally:
         record['metadata_after'] = sorted(str(p) for p in Path('/dev/shm').glob('rclpy_zc_gpu_v1_*'))
         record['preexisting_sockets_preserved'] = record['sockets_after'] == record['sockets_before']
         record['metadata_preserved'] = record['metadata_after'] == record['metadata_before']
+        record['agnocast_srcversion_after'] = preexisting_module_version()
         record['preexisting_module_preserved'] = (
-            Path('/sys/module/agnocast/srcversion').read_text().strip() == record['agnocast_srcversion'])
+            record['agnocast_srcversion_after'] == record['agnocast_srcversion'])
         cuda_shm = list(Path('/dev/shm').glob('cuda.shm.*'))
         record['cuda_shm_after'] = {'files': len(cuda_shm), 'bytes': sum(p.stat().st_size for p in cuda_shm)}
     except Exception as error:

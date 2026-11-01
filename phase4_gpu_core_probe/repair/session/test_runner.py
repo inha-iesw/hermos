@@ -46,7 +46,8 @@ def block_unmocked_processes(monkeypatch):
 
 
 def run_simulated(monkeypatch, tmp_path, counts=(0,), test_code=0, removal=0,
-                  reuse=False, execute=None, corrupt=False):
+                  reuse=False, execute=None, corrupt=False,
+                  host_versions=('preexisting-srcversion', 'preexisting-srcversion')):
     stage = tmp_path / 'session'
     if reuse:
         stage.mkdir()
@@ -64,7 +65,8 @@ def run_simulated(monkeypatch, tmp_path, counts=(0,), test_code=0, removal=0,
     source = {'loaded_agnocast_srcversion': 'preexisting-srcversion',
               'simulated-source': hashlib.sha256(source_data).hexdigest()}
     counts = list(counts)
-    state = {'loaded': False, 'time': 0.0, 'last_count': None, 'calls': []}
+    state = {'loaded': False, 'time': 0.0, 'last_count': None, 'calls': [],
+             'host_version': host_versions[0]}
     read_text = Path.read_text
     read_bytes = Path.read_bytes
     glob = Path.glob
@@ -82,7 +84,9 @@ def run_simulated(monkeypatch, tmp_path, counts=(0,), test_code=0, removal=0,
         if str(path) == MODULE + '/srcversion':
             return manifest['srcversion']
         if str(path) == '/sys/module/agnocast/srcversion':
-            return source['loaded_agnocast_srcversion']
+            if state['host_version'] is None:
+                raise FileNotFoundError(str(path))
+            return state['host_version']
         return read_text(path, *args, **kwargs)
 
     def simulated_bytes(path):
@@ -100,6 +104,8 @@ def run_simulated(monkeypatch, tmp_path, counts=(0,), test_code=0, removal=0,
     def simulated_exists(path):
         if str(path) in (MODULE, '/dev/agnocast_rclpy'):
             return state['loaded']
+        if str(path) == '/sys/module/agnocast':
+            return state['host_version'] is not None
         return exists(path)
 
     def simulated_run(command, **kwargs):
@@ -121,6 +127,7 @@ def run_simulated(monkeypatch, tmp_path, counts=(0,), test_code=0, removal=0,
             return SimpleNamespace(returncode=removal)
         assert command == ['mock-test'], command
         state['calls'].append('test')
+        state['host_version'] = host_versions[1]
         state['test_env'] = kwargs.get('env', {})
         if execute:
             execute(stage, kwargs)
@@ -241,6 +248,40 @@ def test_missing_command_is_rejected_without_creating_stage(monkeypatch, tmp_pat
 
 def test_artifact_mismatch_prevents_module_loading(monkeypatch, tmp_path):
     outcome, record, state, _ = run_simulated(monkeypatch, tmp_path, corrupt=True)
+    assert isinstance(outcome, AssertionError)
+    assert record is None and state['calls'] == []
+
+
+def test_absent_preexisting_module_stays_absent(monkeypatch, tmp_path):
+    outcome, record, state, _ = run_simulated(
+        monkeypatch, tmp_path, host_versions=(None, None))
+    assert outcome == 0
+    assert state['calls'] == ['insmod', 'test', 'rmmod']
+    assert record['agnocast_srcversion'] is None
+    assert record['agnocast_srcversion_after'] is None
+    assert record['preexisting_module_preserved'] is True
+
+
+@pytest.mark.parametrize('before,after', [
+    (None, 'preexisting-srcversion'),
+    ('preexisting-srcversion', None),
+    ('preexisting-srcversion', 'replacement-srcversion'),
+])
+def test_preexisting_module_change_fails_teardown(monkeypatch, tmp_path, before, after):
+    outcome, record, state, _ = run_simulated(
+        monkeypatch, tmp_path, host_versions=(before, after))
+    assert outcome == 70
+    assert state['calls'] == ['insmod', 'test', 'rmmod']
+    assert record['test_exit_code'] == 0
+    assert record['owned_module_unloaded'] is True
+    assert record['agnocast_srcversion'] == before
+    assert record['agnocast_srcversion_after'] == after
+    assert record['preexisting_module_preserved'] is False
+
+
+def test_preexisting_module_mismatch_prevents_loading_owned_module(monkeypatch, tmp_path):
+    outcome, record, state, _ = run_simulated(
+        monkeypatch, tmp_path, host_versions=('unexpected-srcversion', 'unexpected-srcversion'))
     assert isinstance(outcome, AssertionError)
     assert record is None and state['calls'] == []
 
