@@ -21,23 +21,23 @@
 #include <thread>
 #include <vector>
 
-#include "agnocast/agnocast_executor.hpp"
-#include "agnocast/node/agnocast_only_single_threaded_executor.hpp"
+#include "hermos/hermos_executor.hpp"
+#include "hermos/node/hermos_only_single_threaded_executor.hpp"
 
-namespace agnocast
+namespace hermos
 {
 class Node;
 }
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 class SubscriberQueue;
-/** @brief Serialize endpoint controls with callbacks in the existing Agnocast spin loop. */
-class SubscriberExecutor final : public agnocast::AgnocastOnlySingleThreadedExecutor
+/** @brief Serialize endpoint controls with callbacks in the existing Hermos spin loop. */
+class SubscriberExecutor final : public hermos::HermosOnlySingleThreadedExecutor
 {
 public:
   /** @brief Register a manual control group and start the native executor thread. */
-  explicit SubscriberExecutor(const std::shared_ptr<agnocast::Node> & node);
+  explicit SubscriberExecutor(const std::shared_ptr<hermos::Node> & node);
   ~SubscriberExecutor();
   /** @brief Execute synchronously on the worker; reject worker reentry and stopped execution. */
   void invoke(std::function<void()> operation);
@@ -71,4 +71,4 @@ private:
   bool fail_next_control_{false};
 #endif
 };
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

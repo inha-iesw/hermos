@@ -14,10 +14,10 @@
 #include "../subscriber/queue.hpp"
 #include "../types/lease_root.hpp"
 #include "export.hpp"
-#include "rclpy_agnocast/types/field_ops.hpp"
+#include "rclpy_hermos/types/field_ops.hpp"
 
 namespace py = pybind11;
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace tensor
 {
@@ -112,4 +112,4 @@ void bind_testing(py::module_ & module)
     });
 }
 }  // namespace tensor
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

@@ -75,15 +75,15 @@ target_compile_definitions(test_upstream_vmm_fd_memory_driver PRIVATE
   VMM_FD_IMPORT_HELPER_PATH="$<TARGET_FILE:g3_vmm_fd_import_helper>")
 add_dependencies(test_upstream_vmm_fd_memory_driver g3_vmm_fd_import_helper)
 
-find_package(rclpy_agnocast_gpu_msgs REQUIRED)
-find_package(rclpy_agnocast_gpu REQUIRED)
-include_directories(${rclpy_agnocast_gpu_INCLUDE_DIRS})
-find_package(agnocastlib REQUIRED)
+find_package(rclpy_hermos_gpu_msgs REQUIRED)
+find_package(rclpy_hermos_gpu REQUIRED)
+include_directories(${rclpy_hermos_gpu_INCLUDE_DIRS})
+find_package(hermoslib REQUIRED)
 find_package(rclcpp REQUIRED)
 
 ament_add_gtest(test_gpu_descriptor test/test_descriptor.cpp TIMEOUT 10)
 target_compile_features(test_gpu_descriptor PRIVATE cxx_std_17)
-target_link_libraries(test_gpu_descriptor ${rclpy_agnocast_gpu_msgs_TARGETS})
+target_link_libraries(test_gpu_descriptor ${rclpy_hermos_gpu_msgs_TARGETS})
 
 enable_language(CUDA)
 add_executable(g3_transport_peer transport/peer.cpp transport/checksum.cu)
@@ -94,8 +94,8 @@ foreach(_peer g3_transport_peer g3_cleanup_peer)
   set_target_properties(${_peer} PROPERTIES CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON)
   target_link_libraries(${_peer}
     ros2_cuda_ipc_core::ros2_cuda_ipc_core CUDA::cudart
-    ${rclpy_agnocast_gpu_msgs_TARGETS})
-  ament_target_dependencies(${_peer} agnocastlib rclcpp)
+    ${rclpy_hermos_gpu_msgs_TARGETS})
+  ament_target_dependencies(${_peer} hermoslib rclcpp)
 endforeach()
 
 target_compile_definitions(g3_cleanup_peer PRIVATE G3_CLEANUP_INJECTION)

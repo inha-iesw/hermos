@@ -13,8 +13,8 @@ from rclpy.context import Context
 from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.task import Future
 
-from rclpy_agnocast import _native
-from rclpy_agnocast.subscription.typed import TypedSubscription
+from rclpy_hermos import _native
+from rclpy_hermos.subscription.typed import TypedSubscription
 from subscriber.fakes import runtime_for_test
 
 
@@ -416,7 +416,7 @@ def test_take_error_runs_group_cleanup_and_rearms_the_queued_root(harness):
 
 
 def test_notifier_start_failure_removes_waitable_and_releases_native_queue(harness, monkeypatch):
-    from rclpy_agnocast.subscription import typed
+    from rclpy_hermos.subscription import typed
 
     handle = _native._TestTypedSubscription(1, 65536, 65536)
     assert handle.push(11)

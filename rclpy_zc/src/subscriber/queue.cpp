@@ -17,7 +17,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 SubscriberQueue::SubscriberQueue(
   const std::size_t max_count, const std::size_t max_bytes,
@@ -155,4 +155,4 @@ bool SubscriberQueue::drain_for_close() noexcept
   clear();
   return stats().outstanding_leases == 0;
 }
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

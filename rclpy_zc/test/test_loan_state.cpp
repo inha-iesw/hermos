@@ -1,5 +1,5 @@
-#include "rclpy_agnocast/loan.hpp"
-#include "rclpy_agnocast/publisher_worker.hpp"
+#include "rclpy_hermos/loan.hpp"
+#include "rclpy_hermos/publisher_worker.hpp"
 
 #include <gtest/gtest.h>
 
@@ -11,18 +11,18 @@
 namespace
 {
 
-using rclpy_agnocast::LoanAction;
-using rclpy_agnocast::LoanError;
-using rclpy_agnocast::LoanIdentity;
-using rclpy_agnocast::LoanLifecycle;
-using rclpy_agnocast::LoanPhase;
-using rclpy_agnocast::LoanState;
-using rclpy_agnocast::PublisherBackend;
-using rclpy_agnocast::PublisherBackendFactory;
-using rclpy_agnocast::PublisherWorker;
-using rclpy_agnocast::PublisherWorkerError;
-using rclpy_agnocast::WritableBufferSpan;
-using rclpy_agnocast::WritableExportAcquireResult;
+using rclpy_hermos::LoanAction;
+using rclpy_hermos::LoanError;
+using rclpy_hermos::LoanIdentity;
+using rclpy_hermos::LoanLifecycle;
+using rclpy_hermos::LoanPhase;
+using rclpy_hermos::LoanState;
+using rclpy_hermos::PublisherBackend;
+using rclpy_hermos::PublisherBackendFactory;
+using rclpy_hermos::PublisherWorker;
+using rclpy_hermos::PublisherWorkerError;
+using rclpy_hermos::WritableBufferSpan;
+using rclpy_hermos::WritableExportAcquireResult;
 
 constexpr std::uintptr_t kPublisherId = 0x1234U;
 constexpr std::uint64_t kGeneration = 7U;
@@ -44,7 +44,7 @@ class StateBackend final : public PublisherBackend
 {
 public:
   explicit StateBackend(std::shared_ptr<StateTrace> trace) : trace_(std::move(trace)) {}
-  rclpy_agnocast::BorrowedStorage borrow(std::size_t size) override
+  rclpy_hermos::BorrowedStorage borrow(std::size_t size) override
   {return {&trace_->sequence, trace_->data.data(), size};}
   void publish() override {trace_->publish_thread = std::this_thread::get_id();}
   void cancel() noexcept override {trace_->cancel_thread = std::this_thread::get_id();}
@@ -116,7 +116,7 @@ TEST(LoanLifecycle, AllowsForeignThreadToReleasePendingCancel)
   lifecycle.acquire_export();
   lifecycle.request_cancel(identity, true);
 
-  rclpy_agnocast::LoanTransition transition{LoanError::kInvalidPhase, LoanAction::kNone};
+  rclpy_hermos::LoanTransition transition{LoanError::kInvalidPhase, LoanAction::kNone};
   std::thread releaser([&lifecycle, &transition]() {transition = lifecycle.release_export();});
   releaser.join();
 
@@ -173,7 +173,7 @@ TEST(LoanLifecycle, RejectsOriginalIdentityUsedFromForeignThread)
 {
   const auto identity = current_identity();
   LoanLifecycle lifecycle(identity);
-  rclpy_agnocast::LoanTransition transition{LoanError::kNone, LoanAction::kNone};
+  rclpy_hermos::LoanTransition transition{LoanError::kNone, LoanAction::kNone};
 
   std::thread caller([&]() {transition = lifecycle.request_publish(identity);});
   caller.join();
@@ -185,7 +185,7 @@ TEST(LoanLifecycle, RejectsOriginalIdentityUsedFromForeignThread)
 TEST(LoanLifecycle, RejectsWritableExportAcquiredFromForeignThread)
 {
   LoanLifecycle lifecycle(current_identity());
-  rclpy_agnocast::LoanTransition transition{LoanError::kNone, LoanAction::kNone};
+  rclpy_hermos::LoanTransition transition{LoanError::kNone, LoanAction::kNone};
 
   std::thread caller([&]() {transition = lifecycle.acquire_export();});
   caller.join();
@@ -198,7 +198,7 @@ TEST(LoanLifecycle, AllowsForeignThreadToAbandonForDeferredCleanup)
 {
   LoanLifecycle lifecycle(current_identity());
   lifecycle.acquire_export();
-  rclpy_agnocast::LoanTransition transition{LoanError::kInvalidPhase, LoanAction::kNone};
+  rclpy_hermos::LoanTransition transition{LoanError::kInvalidPhase, LoanAction::kNone};
 
   std::thread finalizer([&]() {transition = lifecycle.request_abandon();});
   finalizer.join();

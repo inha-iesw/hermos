@@ -1,4 +1,4 @@
-"""Read owned Agnocast resources and the kernel's domain-scoped endpoint graph."""
+"""Read owned Hermos resources and the kernel's domain-scoped endpoint graph."""
 
 import ctypes
 import fcntl
@@ -24,9 +24,9 @@ class _Result(ctypes.Structure):
 
 def endpoint_count(peers, kind):
     """Query the current fork's CLI ioctl ABI without registering a participant."""
-    # Mirrors agnocast_kmod/agnocast.h ioctl_topic_info_args/topic_info_ret.
+    # Mirrors hermos_kmod/hermos.h ioctl_topic_info_args/topic_info_ret.
     # Recheck this ABI when updating the fork.
-    # The installed ioctl wrapper hardcodes /dev/agnocast, which may belong to another module.
+    # The installed ioctl wrapper hardcodes /dev/hermos, which may belong to another module.
     # Use only the device selected by exact-artifact preflight for this fork.
     assert ctypes.sizeof(ctypes.c_void_p) == 8
     assert ctypes.sizeof(_Query) == 32 and ctypes.sizeof(_Result) == 264
@@ -57,13 +57,13 @@ def wait_for(predicate, description, timeout=10):
 
 
 def heap_path(child):
-    """Return only this exact child's Agnocast heap name."""
-    return Path(f"/dev/shm/agnocast@{child.process.pid}")
+    """Return only this exact child's Hermos heap name."""
+    return Path(f"/dev/shm/hermos@{child.process.pid}")
 
 
 def queues(peers):
     """List only publish-notification queues belonging to this unique test topic."""
-    return sorted(Path("/dev/mqueue").glob(f"agnocast*{peers.topic[1:]}@*"))
+    return sorted(Path("/dev/mqueue").glob(f"hermos*{peers.topic[1:]}@*"))
 
 
 def cleaned(peers):
@@ -83,15 +83,15 @@ def assert_connected_resources(peers, publisher, subscriber):
 
 
 def heap_mappings(child):
-    """Read this process's Agnocast heap mappings, including unlinked heaps."""
+    """Read this process's Hermos heap mappings, including unlinked heaps."""
     return [line for line in Path(f"/proc/{child.process.pid}/maps").read_text().splitlines()
-            if "/dev/shm/agnocast@" in line]
+            if "/dev/shm/hermos@" in line]
 
 
 def publisher_mapping(mappings, publisher_pid, address, size):
     """Require the entire payload to lie in the publisher's read-only shared heap."""
     assert size > 0, "publisher mapping proof requires nonempty storage"
-    expected = f"/dev/shm/agnocast@{publisher_pid}"
+    expected = f"/dev/shm/hermos@{publisher_pid}"
     for line in mappings:
         fields = line.split(maxsplit=5)
         if len(fields) != 6 or fields[1] != "r--s":

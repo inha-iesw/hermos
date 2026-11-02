@@ -1,9 +1,9 @@
-#include "rclpy_agnocast/loan.hpp"
+#include "rclpy_hermos/loan.hpp"
 
 #include <stdexcept>
 #include <utility>
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 
 LoanLifecycle::LoanLifecycle(LoanIdentity identity) : identity_(identity) {}
@@ -291,4 +291,4 @@ void LoanState::queue_cancel(const LoanAction action) noexcept
   (void)worker_->cancel_async(identity_.publisher_id, identity_.generation);
 }
 
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

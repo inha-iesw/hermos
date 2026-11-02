@@ -1,4 +1,4 @@
-#include "rclpy_agnocast/publisher_worker.hpp"
+#include "rclpy_hermos/publisher_worker.hpp"
 #include "publisher/observation.hpp"
 
 #include <condition_variable>
@@ -6,7 +6,7 @@
 #include <mutex>
 #include <thread>
 #include <utility>
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace
 {
@@ -376,4 +376,4 @@ PublisherWorkerError PublisherWorker::cancel_async(
 PublisherWorkerResult PublisherWorker::wait_until_idle()
 {return impl_->wait_until_idle();}
 PublisherWorkerResult PublisherWorker::stop() {return impl_->stop();}
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

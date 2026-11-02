@@ -1,4 +1,4 @@
-#include "rclpy_agnocast/publisher_worker.hpp"
+#include "rclpy_hermos/publisher_worker.hpp"
 
 #include <gtest/gtest.h>
 
@@ -11,11 +11,11 @@
 namespace
 {
 
-using rclpy_agnocast::BorrowedStorage;
-using rclpy_agnocast::PublisherBackend;
-using rclpy_agnocast::PublisherBackendFactory;
-using rclpy_agnocast::PublisherWorker;
-using rclpy_agnocast::PublisherWorkerError;
+using rclpy_hermos::BorrowedStorage;
+using rclpy_hermos::PublisherBackend;
+using rclpy_hermos::PublisherBackendFactory;
+using rclpy_hermos::PublisherWorker;
+using rclpy_hermos::PublisherWorkerError;
 
 constexpr std::uintptr_t kPublisherId = 42U;
 struct BackendTrace

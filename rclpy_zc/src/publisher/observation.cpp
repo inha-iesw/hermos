@@ -24,7 +24,7 @@
 #include <mutex>
 #include <stdexcept>
 
-namespace rclpy_agnocast::observation
+namespace rclpy_hermos::observation
 {
 namespace
 {
@@ -61,11 +61,11 @@ void reset() noexcept
 void enable()
 {
   set_observer = reinterpret_cast<SetObserver>(
-    dlsym(RTLD_DEFAULT, "agnocast_heaphook_test_set_observer"));
+    dlsym(RTLD_DEFAULT, "hermos_heaphook_test_set_observer"));
   shared_address = reinterpret_cast<IsShared>(
-    dlsym(RTLD_DEFAULT, "agnocast_heaphook_test_is_shared"));
+    dlsym(RTLD_DEFAULT, "hermos_heaphook_test_is_shared"));
   read_tls = reinterpret_cast<ReadTls>(
-    dlsym(RTLD_DEFAULT, "agnocast_get_borrowed_publisher_num"));
+    dlsym(RTLD_DEFAULT, "hermos_get_borrowed_publisher_num"));
   if (!set_observer || !shared_address || !read_tls) {
     throw std::runtime_error(
             "production observations require the test-observation heaphook feature");
@@ -245,6 +245,6 @@ bool allocator_event(
   return true;
 }
 
-}  // namespace rclpy_agnocast::observation
+}  // namespace rclpy_hermos::observation
 
 #endif

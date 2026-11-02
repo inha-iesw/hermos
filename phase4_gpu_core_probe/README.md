@@ -4,7 +4,7 @@ The pinned `ros2_cuda_ipc` candidate is **rejected for unmodified G3 adoption**.
 The ordinary C++ GPU fanout works, but the candidate can reissue a GPU pointer
 while an earlier producer write is still pending. This page preserves that
 upstream rejection history and its reproduction commands. The separate
-[bounded repair and native Agnocast experiment](repair/README.md) owns the current
+[bounded repair and native HERMOS experiment](repair/README.md) owns the current
 repair contract and remaining gates; its [evidence history](repair/EVIDENCE.md)
 records each tested revision and run scope. The privilege and lifecycle defects
 identified after §35 have been corrected and verified in §36. G3 is accepted for
@@ -83,7 +83,7 @@ confirm candidate defects/limitations, one is a synchronized cancellation
 control, and one runs the unchanged C++ publisher plus two independent C++ GPU
 consumers. The observer receives scalar status/checksum messages; the demo's
 full-image CPU preview is not launched. This is baseline functionality, not a
-performance result or an Agnocast GPU integration test.
+performance result or an HERMOS GPU integration test.
 
 The existing CPU `scripts/verify` also passed: 12 packages, 39 CTest targets,
 584 cases = 466 PASS + 118 device opt-in SKIP, no failures/errors. No kernel
@@ -128,12 +128,12 @@ Full logs, environment, XML-derived counts and the adoption verdict are in
 ## Original adoption decision and subsequent repair
 
 At the original evaluation, G3 was blocked. Moving the descriptor through
-Agnocast could not repair the original core's generation transition. A core
+HERMOS could not repair the original core's generation transition. A core
 change or another candidate first had to establish atomic generation/admission,
 producer quiescence, bounded imports/completion and safe crash/reset policies. Producer
 stream synchronization in an adapter may address individual producer paths,
 but does not fix concurrent stale-reader admission or crash reclamation.
-The subsequent bounded core repair and actual native Agnocast descriptor tests
+The subsequent bounded core repair and actual native HERMOS descriptor tests
 are documented in [repair/README.md](repair/README.md). They preserve the existing
 GPU engine, CPU ABI and the original rejection record. Remaining G3/G4 limits
 are explicit there.

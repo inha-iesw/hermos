@@ -22,20 +22,20 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "rclpy_agnocast/types/adapter.hpp"
+#include "rclpy_hermos/types/adapter.hpp"
 
-extern "C" const char * rclpy_agnocast_adapter_build_abi()
+extern "C" const char * rclpy_hermos_adapter_build_abi()
 {
-  static const std::string tag = rclpy_agnocast::types::compiled_abi_tag();
+  static const std::string tag = rclpy_hermos::types::compiled_abi_tag();
   return tag.c_str();
 }
 
-extern "C" std::uint32_t rclpy_agnocast_adapter_abi_version()
+extern "C" std::uint32_t rclpy_hermos_adapter_abi_version()
 {
-  return rclpy_agnocast::types::ADAPTER_ABI_VERSION;
+  return rclpy_hermos::types::ADAPTER_ABI_VERSION;
 }
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace types
 {
@@ -270,4 +270,4 @@ TypeDescriptor registered_type(const std::string & ros_type)
 }
 
 }  // namespace types
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

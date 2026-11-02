@@ -20,14 +20,14 @@
 #include <string>
 
 #include "queue.hpp"
-#include "rclpy_agnocast/types/adapter.hpp"
+#include "rclpy_hermos/types/adapter.hpp"
 
-namespace agnocast
+namespace hermos
 {
 class Node;
 }
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 class SubscriptionState;
 class SubscriptionHandle;
@@ -49,7 +49,7 @@ class SubscriberRuntime : public std::enable_shared_from_this<SubscriberRuntime>
 {
 public:
   /** @brief Retain the node and its initialized native session for endpoint lifetime. */
-  SubscriberRuntime(std::shared_ptr<agnocast::Node> node, std::shared_ptr<void> native_session);
+  SubscriberRuntime(std::shared_ptr<hermos::Node> node, std::shared_ptr<void> native_session);
   ~SubscriberRuntime();
   /** @brief Create a bounded typed subscription on the native executor thread. */
   std::shared_ptr<SubscriptionHandle> create_subscription(
@@ -116,4 +116,4 @@ private:
   std::shared_ptr<SubscriptionState> state_;
   friend class SubscriberRuntime;
 };
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

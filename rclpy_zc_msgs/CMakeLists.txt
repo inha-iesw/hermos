@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(rclpy_agnocast_msgs)
+project(rclpy_hermos_msgs)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)

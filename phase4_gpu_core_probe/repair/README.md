@@ -1,4 +1,9 @@
-# Bounded GPU core repair and native Agnocast integration
+# Bounded GPU core repair and native HERMOS integration
+
+> Naming migration: these commands use HERMOS. Existing EVIDENCE and device logs
+> describe the pre-rename Agnocast binaries. Rebuild all peers/providers and the
+> device artifact bundle at `build/hermos/device-arm64` before a new device run;
+> do not reuse or relabel the old G2 manifest. See the [migration guide](../../README.md).
 
 Execution results, registered target counts and the scope of each complete or
 targeted run are recorded in [EVIDENCE.md](EVIDENCE.md). The latest implementation
@@ -45,9 +50,9 @@ their earlier 73-case baseline is not a repaired-source test result.
 Upstream `BufferCore.msg` comments and `doc/buffer_metadata_protocol.md` describe
 the legacy protocol; this patch and the contract below govern repaired peers.
 
-`rclpy_agnocast_gpu_msgs/msg/GpuTensor.msg` carries the unchanged core descriptor
+`rclpy_hermos_gpu_msgs/msg/GpuTensor.msg` carries the unchanged core descriptor
 plus dtype, dense shape/element strides, byte offset and allocation size. Typed
-Agnocast loans carry this CPU metadata. GPU production writes directly into the
+HERMOS loans carry this CPU metadata. GPU production writes directly into the
 core allocation; consumption uses its mapped read handle. The probe returns a
 four-byte GPU checksum to CPU, without staging the 64-byte payload on CPU.
 This is source and functional evidence for this path, not profiler proof.
@@ -156,11 +161,11 @@ the shm capacity itself. A sudo rule must name that fixed helper, never generic
 Python or a checkout worker.
 
 The current scope is complete groups of directly executed, registered probe
-peers, each using `AGNOCAST_BRIDGE_MODE=off` and
-`AGNOCAST_NO_DISCOVERY_AGENT=1`. `IsolatedEpoch` enforces those effective
+peers, each using `HERMOS_BRIDGE_MODE=off` and
+`HERMOS_NO_DISCOVERY_AGENT=1`. `IsolatedEpoch` enforces those effective
 environment values. `ros2 run/launch`, unregistered stock/G1/G2 nodes and DDS
 connectivity across the private mount are not validated integrations. Outside
-Agnocast/GPU connections are forbidden by contract; `/tmp` FD sockets are shared
+HERMOS/GPU connections are forbidden by contract; `/tmp` FD sockets are shared
 paths, not an enforced security boundary. All ownership, timeout, parent-death,
 no-adoption and restart rules are specified in the recovery README. The
 lower-level `Group` API does not provide namespace isolation by itself.
@@ -176,35 +181,35 @@ Thor, capability 11.0, with kernel 6.8.12-1021-tegra/L4T R39.2.1. Architecture 1
 below is specific to this observed configuration; it is not an Orin setting.
 The existing CPU adapter must already be installed in `install/`. Build order is
 repaired core/messages → G4 adapter → G3 probe: the probe consumes the public
-descriptor validator installed by `rclpy_agnocast_gpu`, and G4 interoperability
+descriptor validator installed by `rclpy_hermos_gpu`, and G4 interoperability
 tests then consume the probe executable. The core build itself does not need G4.
 
 ```bash
-mkdir -p log/g3
+mkdir -p log/hermos/g3
 export PYTHONDONTWRITEBYTECODE=1
-python3 phase4_gpu_core_probe/repair/prepare.py > log/g3/repair-sources.json
+python3 phase4_gpu_core_probe/repair/prepare.py > log/hermos/g3/repair-sources.json
 source /opt/ros/humble/setup.bash
-CMAKE_BUILD_PARALLEL_LEVEL=2 colcon --log-base log/g3/repair/core-build build \
+CMAKE_BUILD_PARALLEL_LEVEL=2 colcon --log-base log/hermos/g3/repair/core-build build \
   --base-paths build/g3/repaired/ros2_cuda_ipc/ros2_cuda_ipc_msgs \
-    build/g3/repaired/ros2_cuda_ipc/ros2_cuda_ipc_core rclpy_agnocast_gpu_msgs \
-  --build-base build/g3/repaired-build --install-base install/g3/repaired \
-  --packages-select ros2_cuda_ipc_msgs ros2_cuda_ipc_core rclpy_agnocast_gpu_msgs \
+    build/g3/repaired/ros2_cuda_ipc/ros2_cuda_ipc_core rclpy_hermos_gpu_msgs \
+  --build-base build/hermos/gpu-core --install-base install/hermos/gpu-core \
+  --packages-select ros2_cuda_ipc_msgs ros2_cuda_ipc_core rclpy_hermos_gpu_msgs \
   --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Debug
-source install/setup.bash
-source install/g3/repaired/setup.bash
-CMAKE_BUILD_PARALLEL_LEVEL=2 colcon --log-base log/g4/adapter-build build \
-  --packages-select rclpy_agnocast_gpu \
-  --build-base build/g4 --install-base install/g4 --symlink-install \
+source install/hermos/verify/local_setup.bash
+source install/hermos/gpu-core/local_setup.bash
+CMAKE_BUILD_PARALLEL_LEVEL=2 colcon --log-base log/hermos/g4/adapter-build build \
+  --packages-select rclpy_hermos_gpu \
+  --build-base build/hermos/gpu-test --install-base install/hermos/gpu-test --symlink-install \
   --cmake-args -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Debug
-source install/g4/setup.bash
-CMAKE_BUILD_PARALLEL_LEVEL=2 colcon --log-base log/g3/repair/probe-build build \
-  --base-paths phase4_gpu_core_probe --build-base build/g3/repair-probe \
-  --install-base install/g3/repair-probe \
+source install/hermos/gpu-test/local_setup.bash
+CMAKE_BUILD_PARALLEL_LEVEL=2 colcon --log-base log/hermos/g3/repair/probe-build build \
+  --base-paths phase4_gpu_core_probe --build-base build/hermos/repair-probe \
+  --install-base install/hermos/repair-probe \
   --cmake-args -DG3_REPAIRED_CORE=ON -DBUILD_TESTING=ON \
     -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CUDA_ARCHITECTURES=110
 python3 phase4_gpu_core_probe/repair/session/run_device.py \
-  "$PWD/log/g3/repair-device-session" env G3_RUN_TRANSPORT=1 \
-  ctest --test-dir build/g3/repair-probe/phase4_gpu_core_probe \
+  "$PWD/log/hermos/g3/repair-device-session" env G3_RUN_TRANSPORT=1 \
+  ctest --test-dir build/hermos/repair-probe/phase4_gpu_core_probe \
   -R '^(test_peer_recovery|test_isolated_epoch|test_namespace_worker|test_namespace_device)$' \
   --output-on-failure --no-tests=error
 ```
@@ -215,13 +220,13 @@ on the tested driver. The operational entry point is `recovery/run.py`; its
 command manifest and restart options are documented in the
 [recovery guide](recovery/README.md).
 
-The process tests require `/dev/agnocast_rclpy` and the verified ARM64
-`build/g2-device-arm64/lib/{libagnocast_heaphook.so,libagnocast.so}`. They disable
+The process tests require `/dev/hermos_rclpy` and the verified ARM64
+`build/hermos/device-arm64/lib/{libhermos_heaphook.so,libhermos.so}`. They disable
 bridge/discovery and preload that hook. Before loading a module, check
-`build/g2-device-arm64/artifacts.json`, source identity, ELF architecture,
+`build/hermos/device-arm64/artifacts.json`, source identity, ELF architecture,
 vermagic and the running kernel. The old module inside the nested fork is x86_64.
-Load only the matching `agnocast_rclpy` module and unload it after all device holders
-close and its refcount reaches zero; preserve the pre-existing `agnocast` module.
+Load only the matching `hermos_rclpy` module and unload it after all device holders
+close and its refcount reaches zero; preserve the pre-existing `hermos` module.
 Peer exit alone is insufficient: the forked unlink daemon can retain an inherited
 device FD until its polling loop exits. Absent opt-in,
 the actual transport and supervisor device tests skip; this is not an equivalent
@@ -237,7 +242,7 @@ pytest's temporary-directory retention. Do not set a shared global
 files. Session runner/protocol regressions are registered in CTest; the previous
 runner and evidence under `log/g3/post-import-review-fixes/` remain frozen.
 
-The artifact manifest still refers to the existing nested Agnocast build and source identities. The
+The artifact manifest still refers to the existing nested HERMOS build and source identities. The
 nested fork remains uncommitted; an outer checkout alone cannot reconstruct those
 device artifacts. Runner promotion does not close that reproducibility gap.
 
@@ -272,7 +277,7 @@ in [EVIDENCE.md](EVIDENCE.md).
 | Subscriber context restoration | Releaser/worker pop gates and faults; no drain before restoration |
 | Isolated runner | Missing producer/subscriber case filters return failure despite valid zero-test XML |
 | FD receipt and rollback | Real ancillary replies, malformed FD rejection, request socket/fallback/fcntl failures, close/CLOEXEC, retain/push/import rollback and admission return |
-| Actual Agnocast processes | Checksum/UID, completion, cleanup, drain, crash/restart, receive/parser/reply errors, accepted-FD fcntl and accept errors, and post-receipt CUDA/bind recovery with H=1 |
+| Actual HERMOS processes | Checksum/UID, completion, cleanup, drain, crash/restart, receive/parser/reply errors, accepted-FD fcntl and accept errors, and post-receipt CUDA/bind recovery with H=1 |
 | Owned-peer recovery | Host lifecycle/ownership/error regressions; device unpublished-resource stop, reader-crash restart and terminal-poison exit/restart scenarios |
 | Private namespace epochs | Worker privilege/ownership and teardown regressions; runtime IPC events, reader crashes, terminal poison and actual CLI automatic restart, with independent healthy peers and unchanged host shm |
 | Session tooling (host-only) | Artifact checks, argument rejection, bounded module teardown, exit-code/JSON preservation, peer-log retention and transport statistics protocol |
@@ -301,7 +306,7 @@ bindings and examples remain outside this build.
 These five targets contain 23 cases. The five unchanged upstream targets add
 29 cases, one requiring multiple GPUs. Read-handle fixtures use synthetic
 pointers without dereferencing them; actual import/data coverage comes from the
-VMM child and Agnocast transport. VMM's CPU readback is a functional oracle, not
+VMM child and HERMOS transport. VMM's CPU readback is a functional oracle, not
 copy-free evidence, and its direct importer does not establish the mapper H bound.
 
 The BufferRef and manager targets wrap libstdc++'s steady-clock entry point at link time in
@@ -363,7 +368,7 @@ peer cases below cover that separate rollback and re-import path.
 The native FD-receipt fixture uses
 `/dev/null` and deliberately fails retain/push/import; it does not claim successful
 CUDA import. Its two-header sender may be coalesced into one SCM_RIGHTS array by
-Linux. The actual Agnocast peer cases send duplicated VMM FDs or inject `EPIPE`
+Linux. The actual HERMOS peer cases send duplicated VMM FDs or inject `EPIPE`
 for three requests, then import the same descriptor and verify the GPU checksum.
 These cases cover successful retry after malformed replies and send failure.
 Three additional peer cases receive a valid VMM FD before failing primary retain,
@@ -449,7 +454,7 @@ teardown; the unisolated diagnostic path does not satisfy that boundary.
 Device-session `metadata_preserved` covers only `rclpy_zc_gpu_v1_*`.
 `cuda.shm.*` objects are outside that preservation check. The standalone
 [CUDA event probe](residency/event_probe.py) reproduces residue after explicit
-runtime IPC-event destruction and process exit, without Agnocast, heaphook or the
+runtime IPC-event destruction and process exit, without HERMOS, heaphook or the
 repaired core. Runtime-only IPC events reproduce it, so mixing runtime and driver
 APIs is not a necessary condition. Pure-driver event and
 [VMM allocation/import probes](residency/vmm_probe.cpp) did not add these objects
@@ -458,7 +463,7 @@ establish physical GPU residency or prove all full-suite residue has one cause.
 
 Inventories and mode-level results are recorded in EVIDENCE and the
 [residency diagnostic guide](residency/README.md). Successful setup established
-empty private shm. In completed GPU epochs, runtime-event objects and the Agnocast type
+empty private shm. In completed GPU epochs, runtime-event objects and the HERMOS type
 registry remained private until the final holder exited; the kernel then releases
 that mount. Both §36 GPU sessions preserved the host inventory of 1,309 CUDA shm
 objects / 107,233,280 bytes and unloaded the test module normally at refcount zero.

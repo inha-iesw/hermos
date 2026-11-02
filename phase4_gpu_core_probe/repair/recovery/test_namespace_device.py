@@ -20,7 +20,7 @@ from test_device import Pair
 pytestmark = pytest.mark.skipif(
     os.environ.get('G3_RUN_TRANSPORT') != '1', reason='requires verified device session')
 EVENT_PROBE = Path(__file__).resolve().parents[1] / 'residency/event_probe.py'
-PEER_ENV = {'AGNOCAST_BRIDGE_MODE': 'off', 'AGNOCAST_NO_DISCOVERY_AGENT': '1'}
+PEER_ENV = {'HERMOS_BRIDGE_MODE': 'off', 'HERMOS_NO_DISCOVERY_AGENT': '1'}
 
 
 def host_shm():
@@ -78,7 +78,7 @@ def assert_teardown(record, *, failed, daemons):
         assert record['descendants'] == []
     assert all(item['returncode'] == 0 for item in record['descendants'])
     remaining = dict(record['final_shm'])
-    registry = remaining.pop('agnocast_type_registry', None)
+    registry = remaining.pop('hermos_type_registry', None)
     if daemons:
         # TypeRegistryWriter removes per-PID files, leaving its registry and
         # one IPC-namespace directory. This private tmpfs disappears with the epoch.
@@ -125,10 +125,10 @@ class NamespacePair(Pair):
     """Reuse the native protocol oracle with a namespace worker as sole wait owner."""
 
     def __init__(self, start, fault=None, blocks=1):
-        hook = Path(__file__).resolve().parents[3] / 'build/g2-device-arm64/lib'
-        env = dict(AGNOCAST_DEVICE_PATH='/dev/agnocast_rclpy', AGNOCAST_BRIDGE_MODE='off',
-                   AGNOCAST_NO_DISCOVERY_AGENT='1',
-                   LD_PRELOAD=str(hook / 'libagnocast_heaphook.so'),
+        hook = Path(__file__).resolve().parents[3] / 'build/hermos/device-arm64/lib'
+        env = dict(HERMOS_DEVICE_PATH='/dev/hermos_rclpy', HERMOS_BRIDGE_MODE='off',
+                   HERMOS_NO_DISCOVERY_AGENT='1',
+                   LD_PRELOAD=str(hook / 'libhermos_heaphook.so'),
                    LD_LIBRARY_PATH=str(hook) + ':' + os.environ.get('LD_LIBRARY_PATH', ''))
         topic = f'/g3_namespace_{os.getpid()}_{time.monotonic_ns()}'
         commands = []

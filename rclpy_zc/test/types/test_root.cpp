@@ -13,32 +13,32 @@
 #include <utility>
 #include <vector>
 
-#include "rclpy_agnocast/types/field_ops.hpp"
-#include "rclpy_agnocast/loan.hpp"
+#include "rclpy_hermos/types/field_ops.hpp"
+#include "rclpy_hermos/loan.hpp"
 #include "types/root.hpp"
 
 namespace
 {
-using rclpy_agnocast::BorrowedStorage;
-using rclpy_agnocast::LoanError;
-using rclpy_agnocast::LoanIdentity;
-using rclpy_agnocast::LoanLifecycle;
-using rclpy_agnocast::LoanPhase;
-using rclpy_agnocast::PublisherBackend;
-using rclpy_agnocast::PublisherBackendFactory;
-using rclpy_agnocast::PublisherWorker;
-using rclpy_agnocast::PublisherWorkerError;
-using rclpy_agnocast::types::BufferBusy;
-using rclpy_agnocast::types::FieldMember;
-using rclpy_agnocast::types::message_ops;
-using rclpy_agnocast::types::RootOwner;
-using rclpy_agnocast::types::RootPhase;
-using rclpy_agnocast::types::scalar_ops;
-using rclpy_agnocast::types::ScalarValue;
-using rclpy_agnocast::types::sequence_ops;
-using rclpy_agnocast::types::string_ops;
-using rclpy_agnocast::types::TypeDescriptor;
-using rclpy_agnocast::types::TypeOps;
+using rclpy_hermos::BorrowedStorage;
+using rclpy_hermos::LoanError;
+using rclpy_hermos::LoanIdentity;
+using rclpy_hermos::LoanLifecycle;
+using rclpy_hermos::LoanPhase;
+using rclpy_hermos::PublisherBackend;
+using rclpy_hermos::PublisherBackendFactory;
+using rclpy_hermos::PublisherWorker;
+using rclpy_hermos::PublisherWorkerError;
+using rclpy_hermos::types::BufferBusy;
+using rclpy_hermos::types::FieldMember;
+using rclpy_hermos::types::message_ops;
+using rclpy_hermos::types::RootOwner;
+using rclpy_hermos::types::RootPhase;
+using rclpy_hermos::types::scalar_ops;
+using rclpy_hermos::types::ScalarValue;
+using rclpy_hermos::types::sequence_ops;
+using rclpy_hermos::types::string_ops;
+using rclpy_hermos::types::TypeDescriptor;
+using rclpy_hermos::types::TypeOps;
 
 constexpr std::uintptr_t kPublisher = 73;
 struct Message;
@@ -137,7 +137,7 @@ const TypeDescriptor & descriptor()
 {
   static const auto observed_scalar = [] {
       auto ops = *scalar_ops<std::int32_t>();
-      ops.write = [](rclpy_agnocast::types::FieldRef ref, ScalarValue value) noexcept {
+      ops.write = [](rclpy_hermos::types::FieldRef ref, ScalarValue value) noexcept {
           if (allocator_trace) {
             allocator_trace->scalar_write_thread = std::this_thread::get_id();
           }

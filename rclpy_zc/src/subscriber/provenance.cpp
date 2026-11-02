@@ -10,11 +10,11 @@
 #include <string>
 #include <vector>
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace
 {
-constexpr char kShmPrefix[] = "/dev/shm/agnocast@";
+constexpr char kShmPrefix[] = "/dev/shm/hermos@";
 
 struct Mapping
 {
@@ -26,7 +26,7 @@ struct Mapping
 [[noreturn]] void reject()
 {
   throw std::runtime_error(
-          "subscriber Tensor requires a read-only Agnocast mapping from another process");
+          "subscriber Tensor requires a read-only Hermos mapping from another process");
 }
 std::vector<Mapping> readonly_mappings()
 {
@@ -96,4 +96,4 @@ void require_readonly_mapping(
   const auto origin = covering(maps, root, root_bytes);
   if (data_bytes) {(void)covering(maps, data, data_bytes, &origin);}
 }
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

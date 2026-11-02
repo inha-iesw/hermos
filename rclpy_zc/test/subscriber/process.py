@@ -12,8 +12,8 @@ import time
 import numpy as np
 import rclpy
 
-from rclpy_agnocast import AgnocastRuntime
-from rclpy_agnocast import _native
+from rclpy_hermos import HermosRuntime
+from rclpy_hermos import _native
 
 from checks import check_held
 from checks import inspect
@@ -28,7 +28,7 @@ class Session:
         self.arguments = arguments
         rclpy.init(args=[])
         self.node = rclpy.create_node(f"subscriber_tld_{os.getpid()}")
-        self.runtime = AgnocastRuntime(self.node)
+        self.runtime = HermosRuntime(self.node)
         self.subscription = self.create()
         self.side = None
         self.held = []

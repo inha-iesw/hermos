@@ -13,29 +13,29 @@
 #include <utility>
 #include <vector>
 
-#include "rclpy_agnocast/publisher_worker.hpp"
-#include "rclpy_agnocast/types/field_ops.hpp"
+#include "rclpy_hermos/publisher_worker.hpp"
+#include "rclpy_hermos/types/field_ops.hpp"
 #include "tensor/export.hpp"
 
 namespace
 {
-namespace tensor = rclpy_agnocast::tensor;
-using rclpy_agnocast::BorrowedStorage;
-using rclpy_agnocast::PublisherBackend;
-using rclpy_agnocast::PublisherBackendFactory;
-using rclpy_agnocast::PublisherWorker;
-using rclpy_agnocast::PublisherWorkerError;
-using rclpy_agnocast::types::BufferSpan;
-using rclpy_agnocast::types::FieldKind;
-using rclpy_agnocast::types::FieldOps;
-using rclpy_agnocast::types::FieldRef;
-using rclpy_agnocast::types::RootOwner;
-using rclpy_agnocast::types::RootPhase;
-using rclpy_agnocast::types::scalar_ops;
-using rclpy_agnocast::types::Status;
-using rclpy_agnocast::types::TypeDescriptor;
-using rclpy_agnocast::types::TypeOps;
-using rclpy_agnocast::types::UnsupportedOperation;
+namespace tensor = rclpy_hermos::tensor;
+using rclpy_hermos::BorrowedStorage;
+using rclpy_hermos::PublisherBackend;
+using rclpy_hermos::PublisherBackendFactory;
+using rclpy_hermos::PublisherWorker;
+using rclpy_hermos::PublisherWorkerError;
+using rclpy_hermos::types::BufferSpan;
+using rclpy_hermos::types::FieldKind;
+using rclpy_hermos::types::FieldOps;
+using rclpy_hermos::types::FieldRef;
+using rclpy_hermos::types::RootOwner;
+using rclpy_hermos::types::RootPhase;
+using rclpy_hermos::types::scalar_ops;
+using rclpy_hermos::types::Status;
+using rclpy_hermos::types::TypeDescriptor;
+using rclpy_hermos::types::TypeOps;
+using rclpy_hermos::types::UnsupportedOperation;
 constexpr std::uintptr_t kPublisher = 91;
 enum class Fault
 {

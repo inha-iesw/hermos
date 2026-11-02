@@ -10,7 +10,7 @@ import threading
 
 import pytest
 
-from rclpy_agnocast import _native
+from rclpy_hermos import _native
 
 
 _DTYPES = [
@@ -344,8 +344,8 @@ def _run_isolated(body, *arguments):
         import gc
         import resource
         import sys
-        from rclpy_agnocast import _native
-        from rclpy_agnocast.types.message import Message
+        from rclpy_hermos import _native
+        from rclpy_hermos.types.message import Message
         faulthandler.disable()
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
         handle = _native._TestTypedPublisher(65536)

@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>rclpy_agnocast</name>
+  <name>rclpy_hermos</name>
   <version>0.1.0</version>
-  <description>Python adapter for the Agnocast typed zero-copy data plane.</description>
+  <description>Python adapter for the Hermos typed zero-copy data plane.</description>
   <maintainer email="maintainers@example.com">rclpy zerocopy maintainers</maintainer>
   <license>Apache-2.0</license>
 
@@ -13,9 +13,9 @@
   <build_depend>python3-dev</build_depend>
   <build_depend>pybind11_vendor</build_depend>
 
-  <depend>agnocastlib</depend>
+  <depend>hermoslib</depend>
   <depend>rclcpp</depend>
-  <depend>rclpy_agnocast_msgs</depend>
+  <depend>rclpy_hermos_msgs</depend>
 
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>rclpy</exec_depend>

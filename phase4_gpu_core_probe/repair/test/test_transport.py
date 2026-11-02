@@ -1,4 +1,4 @@
-"""Run real repaired-core GPU peers with typed Agnocast descriptors."""
+"""Run real repaired-core GPU peers with typed Hermos descriptors."""
 
 import os
 from pathlib import Path
@@ -15,7 +15,7 @@ import pytest
 
 pytestmark = pytest.mark.skipif(
     os.environ.get('G3_RUN_TRANSPORT') != '1',
-    reason='requires the verified Agnocast module and ARM64 heaphook')
+    reason='requires the verified Hermos module and ARM64 heaphook')
 
 EVENTS = {'READY', 'PUB', 'FULL', 'AVAILABLE', 'CONNECTIONS', 'CLOSED', 'STASHED',
           'MAPPED', 'REJECTED', 'DROPPED', 'DONE', 'REMAPPED', 'LIMITS_REJECTED',
@@ -30,14 +30,14 @@ class Peer:
         self.stopped = False
         self.descriptors = set()
         env = os.environ.copy()
-        env.update(AGNOCAST_DEVICE_PATH='/dev/agnocast_rclpy', AGNOCAST_BRIDGE_MODE='off',
-                   AGNOCAST_NO_DISCOVERY_AGENT='1')
+        env.update(HERMOS_DEVICE_PATH='/dev/hermos_rclpy', HERMOS_BRIDGE_MODE='off',
+                   HERMOS_NO_DISCOVERY_AGENT='1')
         if fault is not None:
             env['G3_IMPORT_FAILURE'] = fault
         if reply_fault is not None:
             env['G3_FD_REPLY_FAILURE'] = reply_fault
-        hook = Path(__file__).resolve().parents[3] / 'build/g2-device-arm64/lib'
-        env['LD_PRELOAD'] = str(hook / 'libagnocast_heaphook.so')
+        hook = Path(__file__).resolve().parents[3] / 'build/hermos/device-arm64/lib'
+        env['LD_PRELOAD'] = str(hook / 'libhermos_heaphook.so')
         env['LD_LIBRARY_PATH'] = str(hook) + ':' + env.get('LD_LIBRARY_PATH', '')
         self.stderr = (directory / (role + '.stderr')).open('w')
         self.stdout = (directory / (role + '.stdout')).open('w')

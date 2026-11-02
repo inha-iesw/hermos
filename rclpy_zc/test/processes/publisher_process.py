@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one interactive real-backend rclpy Agnocast publisher child."""
+"""Run one interactive real-backend rclpy Hermos publisher child."""
 
 import argparse
 import ctypes
@@ -20,16 +20,16 @@ class PublisherSession:
 
     def __init__(self, arguments):
         import rclpy
-        from rclpy_agnocast import AgnocastRuntime
-        from rclpy_agnocast import _native
+        from rclpy_hermos import HermosRuntime
+        from rclpy_hermos import _native
 
         self._rclpy = rclpy
         self._topic = arguments.topic
         self._depth = arguments.depth
         self._limit = arguments.max_payload_bytes
         rclpy.init(args=[])
-        self._node = rclpy.create_node(f"rclpy_agnocast_system_{os.getpid()}")
-        self._runtime = AgnocastRuntime(self._node)
+        self._node = rclpy.create_node(f"rclpy_hermos_system_{os.getpid()}")
+        self._runtime = HermosRuntime(self._node)
         if arguments.observe:
             _native._test_enable_observation()
         self._observe = arguments.observe
@@ -215,7 +215,7 @@ class PublisherSession:
             self._runtime.close()
         finally:
             if self._observe:
-                from rclpy_agnocast import _native
+                from rclpy_hermos import _native
                 _native._test_disable_observation()
             self._node.destroy_node()
             self._rclpy.shutdown()

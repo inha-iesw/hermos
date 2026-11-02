@@ -1,4 +1,4 @@
-"""Exercise whole-group recovery with the actual Agnocast/CUDA peers."""
+"""Exercise whole-group recovery with the actual Hermos/CUDA peers."""
 
 import json
 import os
@@ -20,10 +20,10 @@ pytestmark = pytest.mark.skipif(
 class Pair:
     def __init__(self, stage, blocks, fault=None):
         binary = os.environ['G3_TRANSPORT_PEER']
-        hook = Path(__file__).resolve().parents[3] / 'build/g2-device-arm64/lib'
-        env = dict(AGNOCAST_DEVICE_PATH='/dev/agnocast_rclpy', AGNOCAST_BRIDGE_MODE='off',
-                   AGNOCAST_NO_DISCOVERY_AGENT='1',
-                   LD_PRELOAD=str(hook / 'libagnocast_heaphook.so'),
+        hook = Path(__file__).resolve().parents[3] / 'build/hermos/device-arm64/lib'
+        env = dict(HERMOS_DEVICE_PATH='/dev/hermos_rclpy', HERMOS_BRIDGE_MODE='off',
+                   HERMOS_NO_DISCOVERY_AGENT='1',
+                   LD_PRELOAD=str(hook / 'libhermos_heaphook.so'),
                    LD_LIBRARY_PATH=str(hook) + ':' + os.environ.get('LD_LIBRARY_PATH', ''))
         topic = f'/g3_recovery_{os.getpid()}_{time.monotonic_ns()}'
         commands = []

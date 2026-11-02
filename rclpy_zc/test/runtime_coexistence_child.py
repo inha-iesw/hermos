@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fresh-process scenarios for rclpy and Agnocast global-state coexistence."""
+"""Fresh-process scenarios for rclpy and Hermos global-state coexistence."""
 
 from __future__ import annotations
 
@@ -15,11 +15,11 @@ EVENT_PREFIX = "TLD_EVENT "
 SKIP_EXIT = 77
 PREFLIGHT_MESSAGES = (
     "LD_PRELOAD must contain",
-    "configured Agnocast heaphook",
-    "cannot inspect loaded Agnocast artifacts",
+    "configured Hermos heaphook",
+    "cannot inspect loaded Hermos artifacts",
     "cannot identify the active malloc provider",
-    "heaphook has no sibling fork libagnocast.so",
-    "_native did not load the heaphook's sibling libagnocast.so",
+    "heaphook has no sibling fork libhermos.so",
+    "_native did not load the heaphook's sibling libhermos.so",
     "does not provide the active malloc",
     "is missing or not readable/writable",
 )
@@ -37,13 +37,13 @@ def emit(name: str, **fields: Any) -> None:
 def backend_import() -> Any:
     """Import the adapter while distinguishing loader unavailability from test failure."""
     try:
-        from rclpy_agnocast import AgnocastRuntime
+        from rclpy_hermos import HermosRuntime
 
-        return AgnocastRuntime
+        return HermosRuntime
     except (ImportError, OSError) as error:
         message = str(error)
         loader_failure = (
-            "libagnocast" in message
+            "libhermos" in message
             or "cannot open shared object file" in message
             or "undefined symbol" in message
         )
@@ -88,7 +88,7 @@ class Scenario:
         self.context = Context()
         rclpy.init(context=self.context, signal_handler_options=SignalHandlerOptions.ALL)
         self.node = rclpy.create_node(
-            f"rclpy_agnocast_tld_{os.getpid()}", context=self.context
+            f"rclpy_hermos_tld_{os.getpid()}", context=self.context
         )
         self.listener = None
         self.executor = None
@@ -100,7 +100,7 @@ class Scenario:
 
     def close_runtime(self) -> None:
         """Close the adapter and require the rclpy context to remain usable."""
-        from rclpy_agnocast import _native
+        from rclpy_hermos import _native
 
         if self.runtime is None:
             return
@@ -125,7 +125,7 @@ class Scenario:
         )
         observed: Set[str] = set()
         self.listener = self.rclpy.create_node(
-            f"rclpy_agnocast_tld_listener_{os.getpid()}",
+            f"rclpy_hermos_tld_listener_{os.getpid()}",
             context=self.context,
             enable_rosout=False,
         )
@@ -201,9 +201,9 @@ def normal_logging() -> None:
         observed = scenario.prepare_rosout()
         pid = os.getpid()
         markers = [
-            f"RCLPY_AGNOCAST_TLD_BEFORE_{pid}",
-            f"RCLPY_AGNOCAST_TLD_DURING_{pid}",
-            f"RCLPY_AGNOCAST_TLD_AFTER_{pid}",
+            f"RCLPY_HERMOS_TLD_BEFORE_{pid}",
+            f"RCLPY_HERMOS_TLD_DURING_{pid}",
+            f"RCLPY_HERMOS_TLD_AFTER_{pid}",
         ]
         emit("ready", pid=pid, phase="normal_logging")
         scenario.log_and_observe(markers[0], observed)
@@ -249,7 +249,7 @@ def signal_scenario(close_before_ready: bool) -> None:
             pid=os.getpid(),
             phase=phase,
             rclpy_signal_observed=True,
-            agnocast_state_observed=False,
+            hermos_state_observed=False,
             keyboard_interrupt=interrupted,
         )
     finally:

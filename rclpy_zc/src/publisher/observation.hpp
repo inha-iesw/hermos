@@ -19,7 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace rclpy_agnocast::observation
+namespace rclpy_hermos::observation
 {
 
 enum class Stage {kIdle, kBorrow, kResize, kFilling, kPublish, kCancel};
@@ -57,6 +57,6 @@ void reset() noexcept;
 bool allocator_event(
   std::uint32_t event, void * pointer, std::size_t size, bool shared) noexcept;
 
-}  // namespace rclpy_agnocast::observation
+}  // namespace rclpy_hermos::observation
 
 #endif

@@ -5,9 +5,9 @@ from threading import Event, RLock, Thread
 
 import pytest
 
-from rclpy_agnocast import _native
-from rclpy_agnocast.subscription import Subscription
-from rclpy_agnocast.subscription import shutdown
+from rclpy_hermos import _native
+from rclpy_hermos.subscription import Subscription
+from rclpy_hermos.subscription import shutdown
 
 from subscriber.fakes import Node
 

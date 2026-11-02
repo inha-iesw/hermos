@@ -1,4 +1,4 @@
-"""Opt-in subprocess TLD for rclpy/Agnocast logging and signal coexistence."""
+"""Opt-in subprocess TLD for rclpy/Hermos logging and signal coexistence."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from system_runtime import SystemConfig
 
 EVENT_PREFIX = "TLD_EVENT "
 SKIP_EXIT = 77
-OPT_IN = "RCLPY_AGNOCAST_RUN_SYSTEM_TLD"
+OPT_IN = "RCLPY_HERMOS_RUN_SYSTEM_TLD"
 FORBIDDEN_LOG_TEXT = (
     "Failed to configure logging",
     "Failed to finalize logging",
@@ -32,7 +32,7 @@ FORBIDDEN_LOG_TEXT = (
 
 pytestmark = pytest.mark.skipif(
     os.environ.get(OPT_IN, "").lower() not in {"1", "true", "yes"},
-    reason=f"set {OPT_IN}=1 to run the Agnocast backend system TLD",
+    reason=f"set {OPT_IN}=1 to run the Hermos backend system TLD",
 )
 
 
@@ -101,7 +101,7 @@ class Child:
         skips = [event for event in self.events if event["name"] == "skip"]
         if len(skips) != 1 or not skips[0].get("reason"):
             pytest.fail(self.failure_text("exit 77 lacked one explicit skip reason"))
-        pytest.skip(f"Agnocast backend preflight unavailable: {skips[0]['reason']}")
+        pytest.skip(f"Hermos backend preflight unavailable: {skips[0]['reason']}")
 
     def finish(self, timeout: float = 30.0) -> Dict[str, object]:
         """Require success, or convert only an explicit exit-77 event into pytest skip."""
@@ -137,7 +137,7 @@ def configured_system() -> SystemConfig:
     try:
         return preflight()
     except PreflightError as error:
-        pytest.skip(f"Agnocast backend preflight unavailable: {error}")
+        pytest.skip(f"Hermos backend preflight unavailable: {error}")
 
 
 def child_environment(
@@ -151,9 +151,9 @@ def child_environment(
     environment["LD_LIBRARY_PATH"] = str(hook.parent) + (
         os.pathsep + prior_library_path if prior_library_path else ""
     )
-    environment["AGNOCAST_BRIDGE_MODE"] = "off"
-    environment["AGNOCAST_NO_DISCOVERY_AGENT"] = "1"
-    environment["AGNOCAST_DEVICE_PATH"] = str(system.device)
+    environment["HERMOS_BRIDGE_MODE"] = "off"
+    environment["HERMOS_NO_DISCOVERY_AGENT"] = "1"
+    environment["HERMOS_DEVICE_PATH"] = str(system.device)
     environment["ROS_DOMAIN_ID"] = str(20 + ((os.getpid() + ordinal) % 180))
     environment["ROS_LOG_DIR"] = str(log_directory)
     environment["RCUTILS_COLORIZED_OUTPUT"] = "0"
@@ -189,9 +189,9 @@ def test_rclpy_logging_survives_adapter_close(tmp_path: Path) -> None:
 
         pid = int(ready["pid"])
         markers = [
-            f"RCLPY_AGNOCAST_TLD_BEFORE_{pid}",
-            f"RCLPY_AGNOCAST_TLD_DURING_{pid}",
-            f"RCLPY_AGNOCAST_TLD_AFTER_{pid}",
+            f"RCLPY_HERMOS_TLD_BEFORE_{pid}",
+            f"RCLPY_HERMOS_TLD_DURING_{pid}",
+            f"RCLPY_HERMOS_TLD_AFTER_{pid}",
         ]
         non_events = "\n".join(
             line for line in child.transcript if not line.startswith(EVENT_PREFIX)
@@ -219,7 +219,7 @@ def test_rclpy_signal_is_chained_while_adapter_is_open(
         result = child.finish()
         assert result["phase"] == "while_open"
         assert result["rclpy_signal_observed"] is True
-        assert result["agnocast_state_observed"] is False
+        assert result["hermos_state_observed"] is False
         # Plain Humble rclpy raises KeyboardInterrupt on SIGINT only.
         assert result["keyboard_interrupt"] is (signum == signal.SIGINT)
         assert_clean_transcript(child)
@@ -238,7 +238,7 @@ def test_rclpy_signal_is_restored_after_adapter_close(
         result = child.finish()
         assert result["phase"] == "after_close"
         assert result["rclpy_signal_observed"] is True
-        assert result["agnocast_state_observed"] is False
+        assert result["hermos_state_observed"] is False
         assert result["keyboard_interrupt"] is (signum == signal.SIGINT)
         assert_clean_transcript(child)
     finally:

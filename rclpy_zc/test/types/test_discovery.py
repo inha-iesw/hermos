@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from rclpy_agnocast.types import discovery
+from rclpy_hermos.types import discovery
 
 
 TYPE = 'example_msgs/msg/Sample'

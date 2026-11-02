@@ -9,7 +9,7 @@ from system_runtime import preflight, system_tld_requested
 @pytest.fixture(scope="module")
 def config():
     if not system_tld_requested():
-        pytest.skip("set RCLPY_AGNOCAST_RUN_SYSTEM_TLD=1 for the two-process checkpoint")
+        pytest.skip("set RCLPY_HERMOS_RUN_SYSTEM_TLD=1 for the two-process checkpoint")
     return preflight()
 
 

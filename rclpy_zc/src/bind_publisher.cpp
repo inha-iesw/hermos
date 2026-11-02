@@ -1,7 +1,7 @@
-#include "rclpy_agnocast/bindings.hpp"
+#include "rclpy_hermos/bindings.hpp"
 
-#include "rclpy_agnocast/buffer_owner.hpp"
-#include "rclpy_agnocast/runtime.hpp"
+#include "rclpy_hermos/buffer_owner.hpp"
+#include "rclpy_hermos/runtime.hpp"
 #include "types/root.hpp"
 
 #include <pybind11/pybind11.h>
@@ -19,7 +19,7 @@
 
 namespace py = pybind11;
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace
 {
@@ -301,4 +301,4 @@ void bind_publisher(py::module_ & module)
 #endif
 }
 
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

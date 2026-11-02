@@ -17,7 +17,7 @@ from system_runtime import command, preflight, Probe, system_tld_requested, wait
 def tensor_config():
     """Require explicit device opt-in and the matching kernel/userspace artifacts."""
     if not system_tld_requested():
-        pytest.skip('set RCLPY_AGNOCAST_RUN_SYSTEM_TLD=1 for the CPU Tensor checkpoint')
+        pytest.skip('set RCLPY_HERMOS_RUN_SYSTEM_TLD=1 for the CPU Tensor checkpoint')
     pytest.importorskip('torch')
     return preflight()
 

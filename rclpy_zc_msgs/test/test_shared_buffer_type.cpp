@@ -1,4 +1,4 @@
-#include "rclpy_agnocast_msgs/msg/shared_buffer.hpp"
+#include "rclpy_hermos_msgs/msg/shared_buffer.hpp"
 #include "rosidl_runtime_cpp/traits.hpp"
 
 #include <gtest/gtest.h>
@@ -11,7 +11,7 @@
 namespace
 {
 
-using SharedBuffer = rclpy_agnocast_msgs::msg::SharedBuffer;
+using SharedBuffer = rclpy_hermos_msgs::msg::SharedBuffer;
 
 static_assert(std::is_same_v<decltype(SharedBuffer::sequence), std::uint64_t>);
 static_assert(std::is_same_v<decltype(SharedBuffer::data), std::vector<std::uint8_t>>);
@@ -34,11 +34,11 @@ TEST(SharedBufferGeneratedType, FieldsMatchSchema)
   EXPECT_EQ(expected_data, message.data);
 }
 
-TEST(SharedBufferGeneratedType, RosidlNameMatchesAgnocastRegistrationName)
+TEST(SharedBufferGeneratedType, RosidlNameMatchesHermosRegistrationName)
 {
   EXPECT_STREQ(
     rosidl_generator_traits::name<SharedBuffer>(),
-    "rclpy_agnocast_msgs/msg/SharedBuffer");
+    "rclpy_hermos_msgs/msg/SharedBuffer");
 }
 
 }  // namespace

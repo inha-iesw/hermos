@@ -19,7 +19,7 @@ void check(const char * operation, CUresult result)
 }
 }  // namespace
 
-// Standalone driver diagnostic: no Agnocast, CUDART, core patch, or GPU reset.
+// Standalone driver diagnostic: no Hermos, CUDART, core patch, or GPU reset.
 // The parent records shared-memory inventories without deleting driver names.
 int main(int argc, char ** argv)
 {

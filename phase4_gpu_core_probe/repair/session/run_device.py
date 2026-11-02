@@ -32,7 +32,7 @@ temporary.mkdir()
 peer_logs.mkdir()
 environment = os.environ.copy()
 environment.update(TMPDIR=str(temporary), G3_PEER_LOG_ROOT=str(peer_logs))
-artifact_root = root / 'build/g2-device-arm64'
+artifact_root = root / 'build/hermos/device-arm64'
 manifest = json.loads((artifact_root / 'artifacts.json').read_text())
 record = {'command': command, 'verified_artifacts': {},
           'temporary_directory': str(temporary), 'peer_log_directory': str(peer_logs)}
@@ -51,15 +51,15 @@ for name, expected in sources.items():
     else:
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == expected, name
 record['source_identity_files'] = len(sources) - 1
-module = artifact_root / 'kmod/agnocast_rclpy.ko'
+module = artifact_root / 'kmod/hermos_rclpy.ko'
 record['kernel'] = os.uname().release
 for key in ('vermagic', 'srcversion'):
     record[key] = subprocess.check_output(['modinfo', '-F', key, str(module)], text=True).strip()
     assert record[key] == manifest[key]
 assert record['kernel'] == manifest['kernel']
 assert os.uname().machine == manifest['architecture']
-assert not Path('/sys/module/agnocast_rclpy').exists()
-assert not Path('/dev/agnocast_rclpy').exists()
+assert not Path('/sys/module/hermos_rclpy').exists()
+assert not Path('/dev/hermos_rclpy').exists()
 record['sockets_before'] = sorted(str(p) for p in Path('/tmp').glob('cuda_memory_pool_*.sock'))
 record['metadata_before'] = sorted(str(p) for p in Path('/dev/shm').glob('rclpy_zc_gpu_v1_*'))
 cuda_shm = list(Path('/dev/shm').glob('cuda.shm.*'))
@@ -69,10 +69,10 @@ try:
     subprocess.run(['sudo', '-n', 'insmod', str(module)], check=True)
     loaded = True
     deadline = time.monotonic() + 3
-    while not Path('/dev/agnocast_rclpy').exists():
+    while not Path('/dev/hermos_rclpy').exists():
         assert time.monotonic() < deadline
         time.sleep(0.01)
-    assert Path('/sys/module/agnocast_rclpy/srcversion').read_text().strip() == record['srcversion']
+    assert Path('/sys/module/hermos_rclpy/srcversion').read_text().strip() == record['srcversion']
     with (stage / 'device-tests.log').open('w') as log:
         result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, env=environment)
     record['test_exit_code'] = result.returncode
@@ -81,7 +81,7 @@ except Exception as error:
 finally:
     try:
         if loaded:
-            refcount_path = Path('/sys/module/agnocast_rclpy/refcnt')
+            refcount_path = Path('/sys/module/hermos_rclpy/refcnt')
             started = time.monotonic()
             record['refcount_after_tests'] = refcount = int(refcount_path.read_text())
             # The inherited device FD can outlive the peers in the unlink daemon,
@@ -95,10 +95,10 @@ finally:
             if refcount == 0:
                 try:
                     record['rmmod_exit_code'] = subprocess.run(
-                        ['sudo', '-n', 'rmmod', 'agnocast_rclpy']).returncode
+                        ['sudo', '-n', 'rmmod', 'hermos_rclpy']).returncode
                 except OSError as error:
                     record['rmmod_error'] = repr(error)
-        record['owned_module_unloaded'] = not Path('/sys/module/agnocast_rclpy').exists()
+        record['owned_module_unloaded'] = not Path('/sys/module/hermos_rclpy').exists()
         record['sockets_after'] = sorted(str(p) for p in Path('/tmp').glob('cuda_memory_pool_*.sock'))
         record['metadata_after'] = sorted(str(p) for p in Path('/dev/shm').glob('rclpy_zc_gpu_v1_*'))
         record['preexisting_sockets_preserved'] = record['sockets_after'] == record['sockets_before']

@@ -15,7 +15,7 @@ from system_runtime import preflight, system_tld_requested
 
 
 def test_shutdown_waits_for_registered_notifier_start_and_rejects_late_start(monkeypatch):
-    from rclpy_agnocast.subscription import shutdown
+    from rclpy_hermos.subscription import shutdown
 
     entered_start, permit_start, entered_shutdown = Event(), Event(), Event()
     stopped = Event()
@@ -85,7 +85,7 @@ def test_child_exits_without_notifier_hang_and_preserves_original_failure(
         backend, scenario, tmp_path):
     if backend == "native":
         if not system_tld_requested():
-            pytest.skip("set RCLPY_AGNOCAST_RUN_SYSTEM_TLD=1 for actual shutdown TLD")
+            pytest.skip("set RCLPY_HERMOS_RUN_SYSTEM_TLD=1 for actual shutdown TLD")
         environment = preflight().child_environment(20 + uuid.uuid4().int % 180)
     else:
         environment = os.environ.copy()

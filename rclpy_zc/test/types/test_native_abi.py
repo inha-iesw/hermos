@@ -11,19 +11,19 @@ import textwrap
 
 import pytest
 
-from rclpy_agnocast import _native
+from rclpy_hermos import _native
 
 
 def test_runtime_reports_abi_of_loaded_registry():
     """Resolve symbols through the extension handle, including RTLD_LOCAL dependencies."""
     library = ctypes.CDLL(_native.__file__)
-    library.rclpy_agnocast_adapter_abi_version.argtypes = []
-    library.rclpy_agnocast_adapter_abi_version.restype = ctypes.c_uint32
-    library.rclpy_agnocast_adapter_build_abi.argtypes = []
-    library.rclpy_agnocast_adapter_build_abi.restype = ctypes.c_char_p
+    library.rclpy_hermos_adapter_abi_version.argtypes = []
+    library.rclpy_hermos_adapter_abi_version.restype = ctypes.c_uint32
+    library.rclpy_hermos_adapter_build_abi.argtypes = []
+    library.rclpy_hermos_adapter_build_abi.restype = ctypes.c_char_p
     assert _native._adapter_abi() == {
-        'version': library.rclpy_agnocast_adapter_abi_version(),
-        'build': library.rclpy_agnocast_adapter_build_abi().decode(),
+        'version': library.rclpy_hermos_adapter_abi_version(),
+        'build': library.rclpy_hermos_adapter_build_abi().decode(),
     }
 
 
@@ -36,8 +36,8 @@ def test_runtime_import_rejects_incompatible_registry(tmp_path, mismatch):
     source = tmp_path / 'registry_identity.cpp'
     source.write_text(textwrap.dedent(f'''\
         #include <cstdint>
-        extern "C" std::uint32_t rclpy_agnocast_adapter_abi_version() {{return {version};}}
-        extern "C" const char * rclpy_agnocast_adapter_build_abi() {{return {json.dumps(build)};}}
+        extern "C" std::uint32_t rclpy_hermos_adapter_abi_version() {{return {version};}}
+        extern "C" const char * rclpy_hermos_adapter_build_abi() {{return {json.dumps(build)};}}
         '''))
     library = tmp_path / 'registry_identity.so'
     compiler = shlex.split(os.environ.get('CXX') or sysconfig.get_config_var('CXX') or 'c++')
@@ -49,12 +49,12 @@ def test_runtime_import_rejects_incompatible_registry(tmp_path, mismatch):
     probe = textwrap.dedent('''\
         import sys
         try:
-            from rclpy_agnocast import _native
+            from rclpy_hermos import _native
         except ImportError as error:
             assert 'runtime adapter ABI mismatch' in str(error), str(error)
         else:
             raise AssertionError('incompatible registry accepted')
-        assert 'rclpy_agnocast._native' not in sys.modules
+        assert 'rclpy_hermos._native' not in sys.modules
         print('RUNTIME_ABI_REJECTED')
         ''')
     result = subprocess.run([sys.executable, '-c', probe], env=environment,

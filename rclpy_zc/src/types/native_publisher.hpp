@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 class PublisherBackendFactory;
 namespace types
@@ -16,7 +16,7 @@ struct TypeDescriptor;
 
 /**
  * @brief Prepare generated endpoint configuration without creating native resources.
- * @param[in] node Non-null borrowed Agnocast node, retained by the worker's session owner.
+ * @param[in] node Non-null borrowed Hermos node, retained by the worker's session owner.
  * @param[in] topic Resolved topic name copied before an active loan can start.
  * @param[in] depth Positive KeepLast depth.
  * @param[in] descriptor Registered metadata and process-pinned operations.
@@ -27,5 +27,5 @@ std::unique_ptr<PublisherBackendFactory> native_publisher_factory(
   std::shared_ptr<const TypeDescriptor> descriptor);
 
 }  // namespace types
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos
 #endif  // TYPES__NATIVE_PUBLISHER_HPP_

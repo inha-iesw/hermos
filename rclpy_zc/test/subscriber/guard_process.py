@@ -12,7 +12,7 @@ import rclpy
 from rcl_interfaces.srv import GetParameters
 from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 
-from rclpy_agnocast import AgnocastRuntime
+from rclpy_hermos import HermosRuntime
 
 from subscriber.checks import check_held, inspect, receipt_settled
 from system_runtime import emit
@@ -39,7 +39,7 @@ class Session:
         if not self.checkpoint:
             self.records = {}
             self._instrument_guards()
-        self.runtime = AgnocastRuntime(self.node)
+        self.runtime = HermosRuntime(self.node)
         self.mode = "inspect"
         self.received = []
         self.side_received = []

@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
-# Device-independent gate; actual Agnocast system tests remain opt-in.
+# Device-independent gate; actual HERMOS system tests remain opt-in.
 set -eo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+unset AMENT_PREFIX_PATH CMAKE_PREFIX_PATH COLCON_PREFIX_PATH PYTHONPATH LD_LIBRARY_PATH LD_PRELOAD
 source /opt/ros/humble/setup.bash
-colcon build --symlink-install \
-  --packages-up-to rclpy_agnocast_adapters rclpy_agnocast_test_adapters \
+colcon --log-base log/hermos/verify build --symlink-install \
+  --build-base build/hermos/verify --install-base install/hermos/verify \
+  --packages-up-to rclpy_hermos_adapters rclpy_hermos_test_adapters g5_benchmark_adapters \
   --cmake-args -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
-source install/setup.bash
-ctest --test-dir build/rclpy_agnocast_msgs --output-on-failure --no-tests=error
-ctest --test-dir build/rclpy_agnocast --output-on-failure --no-tests=error
-ctest --test-dir build/rclpy_agnocast_codegen --output-on-failure --no-tests=error
-ctest --test-dir build/rclpy_agnocast_adapters --output-on-failure --no-tests=error
-ctest --test-dir build/rclpy_agnocast_test_adapters --output-on-failure --no-tests=error
+source install/hermos/verify/local_setup.bash
+ctest --test-dir build/hermos/verify/rclpy_hermos_msgs --output-on-failure --no-tests=error
+ctest --test-dir build/hermos/verify/rclpy_hermos --output-on-failure --no-tests=error
+ctest --test-dir build/hermos/verify/rclpy_hermos_codegen --output-on-failure --no-tests=error
+ctest --test-dir build/hermos/verify/rclpy_hermos_adapters --output-on-failure --no-tests=error
+ctest --test-dir build/hermos/verify/rclpy_hermos_test_adapters --output-on-failure --no-tests=error
+ctest --test-dir build/hermos/verify/g5_benchmark_adapters --output-on-failure --no-tests=error
+if [[ "${G5_VERIFY_GPU_HOST:-0}" == 1 ]]; then
+  bash experiments/g5/gpu_latency/verify.sh
+fi

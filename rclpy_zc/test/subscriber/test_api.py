@@ -2,8 +2,8 @@
 
 import pytest
 
-from rclpy_agnocast import _native
-from rclpy_agnocast import runtime as runtime_module
+from rclpy_hermos import _native
+from rclpy_hermos import runtime as runtime_module
 
 from subscriber.fakes import Node, runtime_for_test
 

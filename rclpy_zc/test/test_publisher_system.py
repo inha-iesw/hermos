@@ -61,7 +61,7 @@ def test_requested_system_preflight():
 @pytest.fixture(scope="module")
 def system_config() -> SystemConfig:
     if not system_tld_requested():
-        pytest.skip("set RCLPY_AGNOCAST_RUN_SYSTEM_TLD=1 for real backend tests")
+        pytest.skip("set RCLPY_HERMOS_RUN_SYSTEM_TLD=1 for real backend tests")
     try:
         return _preflight_once()
     except PreflightError:
@@ -84,7 +84,7 @@ def _publisher_command(config: SystemConfig, topic: str) -> list[str]:
 
 @pytest.fixture
 def backend_pair(system_config: SystemConfig):
-    topic = f"/rclpy_agnocast_system_{uuid.uuid4().hex}"
+    topic = f"/rclpy_hermos_system_{uuid.uuid4().hex}"
     domain_id = 20 + uuid.uuid4().int % 180
     environment = system_config.child_environment(domain_id)
     probes = []

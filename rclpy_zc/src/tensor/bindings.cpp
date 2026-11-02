@@ -4,7 +4,7 @@
 #include <utility>
 
 namespace py = pybind11;
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace tensor
 {
@@ -70,4 +70,4 @@ py::capsule subscriber_capsule(
   return capsule(export_dlpack(std::move(root), path, generation, dimensions(shape)));
 }
 }  // namespace tensor
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

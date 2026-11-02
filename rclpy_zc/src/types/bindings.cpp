@@ -16,11 +16,11 @@
 
 #include <string>
 
-#include "rclpy_agnocast/types/adapter.hpp"
+#include "rclpy_hermos/types/adapter.hpp"
 
 namespace py = pybind11;
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace types
 {
@@ -33,16 +33,16 @@ void bind_typed_testing(py::module_ & module);
 
 void bind_types(py::module_ & module)
 {
-  if (::rclpy_agnocast_adapter_abi_version() != types::ADAPTER_ABI_VERSION ||
-    std::string(::rclpy_agnocast_adapter_build_abi()) != types::compiled_abi_tag())
+  if (::rclpy_hermos_adapter_abi_version() != types::ADAPTER_ABI_VERSION ||
+    std::string(::rclpy_hermos_adapter_build_abi()) != types::compiled_abi_tag())
   {
     throw py::import_error("runtime adapter ABI mismatch");
   }
   module.def(
     "_adapter_abi", []() {
       py::dict result;
-      result["version"] = ::rclpy_agnocast_adapter_abi_version();
-      result["build"] = ::rclpy_agnocast_adapter_build_abi();
+      result["version"] = ::rclpy_hermos_adapter_abi_version();
+      result["build"] = ::rclpy_hermos_adapter_build_abi();
       return result;
     });
   module.def(
@@ -63,4 +63,4 @@ void bind_types(py::module_ & module)
 #endif
 }
 
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

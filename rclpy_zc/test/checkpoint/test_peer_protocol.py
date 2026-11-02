@@ -68,7 +68,7 @@ def test_checkpoint_commands_do_not_access_guard_notifier_or_registries(monkeypa
     monkeypatch.setattr(guard_process.rclpy, "init", lambda **kwargs: None)
     monkeypatch.setattr(guard_process.rclpy, "create_node", lambda name: node)
     monkeypatch.setattr(guard_process.rclpy, "try_shutdown", lambda: None)
-    monkeypatch.setattr(guard_process, "AgnocastRuntime", lambda node: runtime)
+    monkeypatch.setattr(guard_process, "HermosRuntime", lambda node: runtime)
     monkeypatch.setattr(guard_process, "SingleThreadedExecutor", lambda: executor)
     monkeypatch.setattr(guard_process, "inspect", lambda lease, observation: {"sequence": 1})
     events = []

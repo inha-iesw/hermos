@@ -8,8 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from rclpy_agnocast import _native
-from rclpy_agnocast.types.publisher import TypedPublisher
+from rclpy_hermos import _native
+from rclpy_hermos.types.publisher import TypedPublisher
 
 
 @pytest.fixture
@@ -45,8 +45,8 @@ import os
 import struct
 import sys
 if sys.argv[1] == 'recognized':
-    from rclpy_agnocast import _native
-    name = _native._test_agnocast_shm_name(os.getpid())
+    from rclpy_hermos import _native
+    name = _native._test_hermos_shm_name(os.getpid())
 else:
     name = '/unknown@' + str(os.getpid())
 path = '/dev/shm' + name

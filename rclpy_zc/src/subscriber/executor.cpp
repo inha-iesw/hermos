@@ -20,11 +20,11 @@
 #include <utility>
 
 #include "queue.hpp"
-#include "agnocast/node/agnocast_node.hpp"
+#include "hermos/node/hermos_node.hpp"
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
-SubscriberExecutor::SubscriberExecutor(const std::shared_ptr<agnocast::Node> & node)
+SubscriberExecutor::SubscriberExecutor(const std::shared_ptr<hermos::Node> & node)
 : control_group_(node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false))
 {
   add_callback_group(control_group_, node->get_node_base_interface());
@@ -44,10 +44,10 @@ void SubscriberExecutor::invoke(std::function<void()> operation)
     std::lock_guard<std::mutex> lock(control_mutex_);
     throw_if_stopped_locked();
     auto callable = std::make_shared<std::function<void()>>([task]() {(*task)();});
-    std::lock_guard<std::mutex> ready_lock(ready_agnocast_executables_mutex_);
+    std::lock_guard<std::mutex> ready_lock(ready_hermos_executables_mutex_);
     // Controls precede prefetched data so a hot subscription cannot starve close().
-    ready_agnocast_executables_.insert(
-      ready_agnocast_executables_.begin(), {std::move(callable), control_group_});
+    ready_hermos_executables_.insert(
+      ready_hermos_executables_.begin(), {std::move(callable), control_group_});
 #ifdef BUILD_TESTING
     if (fail_next_control_) {
       fail_next_control_ = false;
@@ -55,8 +55,8 @@ void SubscriberExecutor::invoke(std::function<void()> operation)
         []() {
           throw std::runtime_error("injected subscriber spin failure");
         });
-      ready_agnocast_executables_.insert(
-        ready_agnocast_executables_.begin(), {std::move(failure), control_group_});
+      ready_hermos_executables_.insert(
+        ready_hermos_executables_.begin(), {std::move(failure), control_group_});
     }
 #endif
   }
@@ -86,8 +86,8 @@ void SubscriberExecutor::invoke_or_join(std::function<void()> operation)
 void SubscriberExecutor::detach(const rclcpp::CallbackGroup::SharedPtr & group)
 {
   remove_callback_group(group);
-  std::lock_guard<std::mutex> lock(ready_agnocast_executables_mutex_);
-  auto & ready = ready_agnocast_executables_;
+  std::lock_guard<std::mutex> lock(ready_hermos_executables_mutex_);
+  auto & ready = ready_hermos_executables_;
   ready.erase(
     std::remove_if(
       ready.begin(), ready.end(), [&group](const auto & item) {
@@ -107,8 +107,8 @@ void SubscriberExecutor::run() noexcept
   stopped_ = true;
   failure_ = failure;
   {
-    std::lock_guard<std::mutex> ready_lock(ready_agnocast_executables_mutex_);
-    ready_agnocast_executables_.clear();
+    std::lock_guard<std::mutex> ready_lock(ready_hermos_executables_mutex_);
+    ready_hermos_executables_.clear();
   }
   // Never acquire the manager lock here: its close path holds it while joining this worker.
   const auto terminal = failure ? failure :
@@ -168,4 +168,4 @@ void SubscriberExecutor::test_stop(const bool fail)
   if (thread_.joinable()) {thread_.join();}
 }
 #endif
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

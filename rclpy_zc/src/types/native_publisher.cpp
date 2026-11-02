@@ -6,12 +6,12 @@
 #include <stdexcept>
 #include <utility>
 
-#include "rclpy_agnocast/publisher_worker.hpp"
-#include "rclpy_agnocast/types/adapter.hpp"
-#include "rclpy_agnocast/types/operations.hpp"
+#include "rclpy_hermos/publisher_worker.hpp"
+#include "rclpy_hermos/types/adapter.hpp"
+#include "rclpy_hermos/types/operations.hpp"
 #include "../publisher/observation.hpp"
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace types
 {
@@ -117,4 +117,4 @@ std::unique_ptr<PublisherBackendFactory> native_publisher_factory(
 }
 
 }  // namespace types
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

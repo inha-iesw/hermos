@@ -1,25 +1,25 @@
-#include "rclpy_agnocast/runtime.hpp"
+#include "rclpy_hermos/runtime.hpp"
 
-#include "agnocast/agnocast.hpp"
-#include "rclpy_agnocast_msgs/msg/shared_buffer.hpp"
+#include "hermos/hermos.hpp"
+#include "rclpy_hermos_msgs/msg/shared_buffer.hpp"
 #include "publisher/observation.hpp"
 #include "subscriber/native.hpp"
 #include "types/native_publisher.hpp"
 #include "types/root.hpp"
-#include "rclpy_agnocast/types/adapter.hpp"
+#include "rclpy_hermos/types/adapter.hpp"
 
 #include <mutex>
 #include <set>
 #include <stdexcept>
 #include <thread>
 #include <utility>
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace
 {
-using Message = rclpy_agnocast_msgs::msg::SharedBuffer;
-using NativeLoan = agnocast::ipc_shared_ptr<Message>;
-using NativePublisher = agnocast::Publisher<Message>;
+using Message = rclpy_hermos_msgs::msg::SharedBuffer;
+using NativeLoan = hermos::ipc_shared_ptr<Message>;
+using NativePublisher = hermos::Publisher<Message>;
 std::mutex session_mutex;
 bool session_claimed{false};
 
@@ -29,7 +29,7 @@ public:
   SessionClaim()
   {
     std::lock_guard<std::mutex> lock(session_mutex);
-    if (session_claimed) throw std::runtime_error("an Agnocast runtime session is already active");
+    if (session_claimed) throw std::runtime_error("an Hermos runtime session is already active");
     session_claimed = true;
   }
   ~SessionClaim()
@@ -43,27 +43,27 @@ class NativeSession
 public:
   explicit NativeSession(const std::string & node_name)
   {
-    if (agnocast::ok()) throw std::runtime_error("Agnocast was initialized outside RuntimeCore");
-    agnocast::InitOptions init_options;
+    if (hermos::ok()) throw std::runtime_error("Hermos was initialized outside RuntimeCore");
+    hermos::InitOptions init_options;
     init_options.configure_logging = false;
-    agnocast::init(0, nullptr, init_options);
+    hermos::init(0, nullptr, init_options);
     try {
       rclcpp::NodeOptions options;
       options.start_parameter_services(false);
       options.start_parameter_event_publisher(false);
       options.use_clock_thread(false);
-      node = std::make_shared<agnocast::Node>(node_name, options);
+      node = std::make_shared<hermos::Node>(node_name, options);
     } catch (...) {
-      agnocast::shutdown();
+      hermos::shutdown();
       throw;
     }
   }
   ~NativeSession()
   {
     node.reset();
-    agnocast::shutdown();
+    hermos::shutdown();
   }
-  std::shared_ptr<agnocast::Node> node;
+  std::shared_ptr<hermos::Node> node;
 
 private:
   SessionClaim claim_;
@@ -156,18 +156,18 @@ class SharedBufferFactory final : public PublisherBackendFactory
 {
 public:
   SharedBufferFactory(
-    std::shared_ptr<agnocast::Node> node, std::string topic, const std::size_t depth)
+    std::shared_ptr<hermos::Node> node, std::string topic, const std::size_t depth)
   : node_(std::move(node)), topic_(std::move(topic)), depth_(depth) {}
 
   std::unique_ptr<PublisherBackend> create() override
   {
     auto publisher = node_->create_publisher<Message>(
-      topic_, depth_, agnocast::PublisherOptions{});
+      topic_, depth_, hermos::PublisherOptions{});
     return std::make_unique<SharedBufferBackend>(std::move(publisher));
   }
 
 private:
-  std::shared_ptr<agnocast::Node> node_;
+  std::shared_ptr<hermos::Node> node_;
   std::string topic_;
   std::size_t depth_;
 };
@@ -472,4 +472,4 @@ PublisherWorkerResult PublisherHandle::close() noexcept
   }
 }
 
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

@@ -19,7 +19,7 @@
 #include <memory>
 #include <mutex>
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace types
 {
@@ -73,4 +73,4 @@ private:
   mutable std::mutex mutex_;
   std::shared_ptr<LeaseBufferOwner> owner_;
 };
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

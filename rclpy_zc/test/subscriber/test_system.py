@@ -21,7 +21,7 @@ from system_runtime import wait_connected
 @pytest.fixture(scope="module")
 def config():
     if not system_tld_requested():
-        pytest.skip("set RCLPY_AGNOCAST_RUN_SYSTEM_TLD=1 for actual subscriber TLD")
+        pytest.skip("set RCLPY_HERMOS_RUN_SYSTEM_TLD=1 for actual subscriber TLD")
     return preflight()
 
 

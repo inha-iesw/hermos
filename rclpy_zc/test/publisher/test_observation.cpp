@@ -19,7 +19,7 @@
 
 #include "publisher/observation.hpp"
 
-namespace obs = rclpy_agnocast::observation;
+namespace obs = rclpy_hermos::observation;
 
 class PublisherObservationTest : public ::testing::Test
 {

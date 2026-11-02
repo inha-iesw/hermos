@@ -6,7 +6,7 @@
 #include <string>
 #include "../publisher/observation.hpp"
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace types
 {
@@ -315,4 +315,4 @@ RootSnapshot RootOwner::snapshot() const
   return {phase_locked(), generation_, accounted_, lifecycle_.export_count()};
 }
 }  // namespace types
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

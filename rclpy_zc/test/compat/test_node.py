@@ -7,8 +7,8 @@ from rclpy.duration import Duration
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
 
-from rclpy_agnocast import Node, SubscriptionLimits
-from rclpy_agnocast.compat import node as node_module
+from rclpy_hermos import Node, SubscriptionLimits
+from rclpy_hermos.compat import node as node_module
 
 
 def qos(**changes):
@@ -61,7 +61,7 @@ def nodes(monkeypatch, tmp_path):
     context = Context()
     context.init(args=[])
     Runtime.active = None
-    monkeypatch.setattr(node_module, 'AgnocastRuntime', Runtime)
+    monkeypatch.setattr(node_module, 'HermosRuntime', Runtime)
     monkeypatch.setattr(node_module, 'resolve_adapter',
                         lambda cls: {'ros_type': 'std_msgs/msg/String'})
     created = []
@@ -97,7 +97,7 @@ def test_typed_endpoints_resolve_names_without_stock_native_handle_registry(node
     node = nodes(namespace='/robot', cli_args=['--ros-args', '-r', 'input:=output'])
     original = (list(node.publishers), list(node.subscriptions))
     publisher = node.create_publisher(
-        String, 'input', qos(), transport='agnocast', max_message_bytes=1024)
+        String, 'input', qos(), transport='hermos', max_message_bytes=1024)
     group = ReentrantCallbackGroup()
     limits = SubscriptionLimits(3, 4096, 1024)
 
@@ -105,7 +105,7 @@ def test_typed_endpoints_resolve_names_without_stock_native_handle_registry(node
         pass
 
     subscription = node.create_subscription(
-        String, 'input', callback, qos(), transport='agnocast', limits=limits,
+        String, 'input', callback, qos(), transport='hermos', limits=limits,
         callback_group=group)
     runtime = Runtime.active
     assert runtime.calls == [
@@ -133,9 +133,9 @@ def test_unsupported_qos_rejected_before_runtime_or_endpoint(nodes, profile, kin
     initial = list(node.waitables)
     with pytest.raises(NotImplementedError):
         if kind == 'publisher':
-            node.create_publisher(String, 'x', profile, transport='agnocast', max_message_bytes=32)
+            node.create_publisher(String, 'x', profile, transport='hermos', max_message_bytes=32)
         else:
-            node.create_subscription(String, 'x', lambda msg: None, profile, transport='agnocast',
+            node.create_subscription(String, 'x', lambda msg: None, profile, transport='hermos',
                                      limits=SubscriptionLimits(1, 64, 32))
     assert Runtime.active is None
     assert list(node.waitables) == initial
@@ -146,7 +146,7 @@ def test_unsupported_qos_rejected_before_runtime_or_endpoint(nodes, profile, kin
 def test_unsupported_subscription_options_do_not_allocate(nodes, option):
     node = nodes()
     with pytest.raises(NotImplementedError):
-        node.create_subscription(String, 'x', lambda msg: None, qos(), transport='agnocast',
+        node.create_subscription(String, 'x', lambda msg: None, qos(), transport='hermos',
                                  limits=SubscriptionLimits(1, 64, 32), **option)
     assert Runtime.active is None
 
@@ -155,7 +155,7 @@ def test_unsupported_subscription_options_do_not_allocate(nodes, option):
 def test_invalid_publisher_limit_rejected_before_runtime(nodes, limit):
     node = nodes()
     with pytest.raises((TypeError, ValueError)):
-        node.create_publisher(String, 'x', qos(), transport='agnocast', max_message_bytes=limit)
+        node.create_publisher(String, 'x', qos(), transport='hermos', max_message_bytes=limit)
     assert Runtime.active is None
 
 
@@ -167,24 +167,24 @@ def test_schema_lookup_failure_does_not_attach_runtime(nodes, monkeypatch):
 
     monkeypatch.setattr(node_module, 'resolve_adapter', missing)
     with pytest.raises(LookupError, match='no adapter'):
-        node.create_publisher(String, 'x', qos(), transport='agnocast', max_message_bytes=32)
+        node.create_publisher(String, 'x', qos(), transport='hermos', max_message_bytes=32)
     assert Runtime.active is None
 
 
-def test_second_agnocast_node_rejected_but_dds_node_stays_usable(nodes):
+def test_second_hermos_node_rejected_but_dds_node_stays_usable(nodes):
     first, second = nodes('first'), nodes('second')
-    first.create_publisher(String, 'x', qos(), transport='agnocast', max_message_bytes=32)
+    first.create_publisher(String, 'x', qos(), transport='hermos', max_message_bytes=32)
     runtime = Runtime.active
     second.create_publisher(String, 'ordinary', 2)
     with pytest.raises(RuntimeError, match='already active'):
-        second.create_publisher(String, 'y', qos(), transport='agnocast', max_message_bytes=32)
+        second.create_publisher(String, 'y', qos(), transport='hermos', max_message_bytes=32)
     assert Runtime.active is runtime
     assert len(runtime.calls) == 1
 
 
 def test_destroy_busy_preserves_node_and_endpoint_until_retry(nodes):
     node = nodes()
-    pub = node.create_publisher(String, 'x', qos(), transport='agnocast', max_message_bytes=32)
+    pub = node.create_publisher(String, 'x', qos(), transport='hermos', max_message_bytes=32)
     pub.busy = True
     with pytest.raises(RuntimeError, match='retry'):
         node.destroy_publisher(pub)
@@ -197,7 +197,7 @@ def test_destroy_busy_preserves_node_and_endpoint_until_retry(nodes):
     assert node.get_name() == 'facade'
     assert any(pub.topic_name == '/parameter_events' for pub in node.publishers)
     with pytest.raises(RuntimeError):
-        node.create_publisher(String, 'x', qos(), transport='agnocast', max_message_bytes=32)
+        node.create_publisher(String, 'x', qos(), transport='hermos', max_message_bytes=32)
     runtime.busy = False
     node.destroy_node()
     assert runtime.closed
@@ -212,7 +212,7 @@ def test_failed_initial_endpoint_releases_lazy_runtime(nodes, monkeypatch):
 
     monkeypatch.setattr(Runtime, 'create_typed_publisher', failed)
     with pytest.raises(ValueError) as caught:
-        node.create_publisher(String, 'x', qos(), transport='agnocast', max_message_bytes=32)
+        node.create_publisher(String, 'x', qos(), transport='hermos', max_message_bytes=32)
     assert caught.value is native_error
     assert Runtime.active is None
 
@@ -221,7 +221,7 @@ def test_failed_initial_endpoint_releases_lazy_runtime(nodes, monkeypatch):
 def test_invalid_native_depth_rejected_before_runtime(nodes, depth):
     node = nodes()
     with pytest.raises(ValueError, match='depth'):
-        node.create_publisher(String, 'x', qos(depth=depth), transport='agnocast',
+        node.create_publisher(String, 'x', qos(depth=depth), transport='hermos',
                               max_message_bytes=32)
     assert Runtime.active is None
 
@@ -236,7 +236,7 @@ def test_invalid_native_depth_rejected_before_runtime(nodes, depth):
 def test_invalid_subscription_contract_never_attaches_runtime(nodes, options, error):
     node = nodes()
     arguments = dict(msg_type=String, topic='x', callback=lambda msg: None,
-                     qos_profile=qos(), transport='agnocast', limits=SubscriptionLimits(1, 64, 32))
+                     qos_profile=qos(), transport='hermos', limits=SubscriptionLimits(1, 64, 32))
     arguments.update(options)
     with pytest.raises(error):
         node.create_subscription(**arguments)
@@ -246,7 +246,7 @@ def test_invalid_subscription_contract_never_attaches_runtime(nodes, options, er
 def test_second_endpoint_failure_keeps_existing_runtime_and_publisher(nodes, monkeypatch):
     node = nodes()
     publisher = node.create_publisher(
-        String, 'x', qos(), transport='agnocast', max_message_bytes=32)
+        String, 'x', qos(), transport='hermos', max_message_bytes=32)
     runtime = Runtime.active
 
     def failed(*args, **kwargs):
@@ -254,7 +254,7 @@ def test_second_endpoint_failure_keeps_existing_runtime_and_publisher(nodes, mon
 
     monkeypatch.setattr(runtime, 'create_typed_subscription', failed)
     with pytest.raises(ValueError, match='factory rejected'):
-        node.create_subscription(String, 'x', lambda msg: None, qos(), transport='agnocast',
+        node.create_subscription(String, 'x', lambda msg: None, qos(), transport='hermos',
                                  limits=SubscriptionLimits(1, 64, 32))
     assert Runtime.active is runtime
     assert not runtime.closed

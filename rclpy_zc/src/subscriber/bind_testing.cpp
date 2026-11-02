@@ -28,10 +28,10 @@
 
 #include "queue.hpp"
 #include "native.hpp"
-#include "agnocast/agnocast_utils.hpp"
+#include "hermos/hermos_utils.hpp"
 
 namespace py = pybind11;
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace
 {
@@ -103,7 +103,7 @@ bool wait_holding_gil(
 
 void bind_subscriber_testing(py::module_ & module)
 {
-  module.def("_test_agnocast_shm_name", &agnocast::create_shm_name);
+  module.def("_test_hermos_shm_name", &hermos::create_shm_name);
   py::class_<TestSubscription>(module, "_TestSubscription")
   .def(py::init<std::size_t, std::size_t>())
   .def("push", &TestSubscription::push)
@@ -140,4 +140,4 @@ void bind_subscriber_testing(py::module_ & module)
         }, timeout_ms, ready_fd);
     });
 }
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

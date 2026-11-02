@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from rclpy_agnocast import runtime as runtime_module
+from rclpy_hermos import runtime as runtime_module
 
 from subscriber.fakes import Node, runtime_for_test
 
@@ -87,8 +87,8 @@ def test_rclpy_node_context_must_be_active():
 def test_loaded_artifact_check_rejects_non_interposed_heaphook(
     monkeypatch, tmp_path: Path
 ):
-    hook = tmp_path / "libagnocast_heaphook.so"
-    library = tmp_path / "libagnocast.so"
+    hook = tmp_path / "libhermos_heaphook.so"
+    library = tmp_path / "libhermos.so"
     hook.touch()
     library.touch()
     monkeypatch.setenv("LD_PRELOAD", str(hook))
@@ -96,42 +96,42 @@ def test_loaded_artifact_check_rejects_non_interposed_heaphook(
     monkeypatch.setattr(runtime_module, "_loaded_object_paths", lambda: {hook, library})
 
     with pytest.raises(RuntimeError, match="does not provide the active malloc"):
-        runtime_module._verify_loaded_agnocast()
+        runtime_module._verify_loaded_hermos()
 
 
 def test_loaded_artifact_check_accepts_one_coherent_loaded_pair(
     monkeypatch, tmp_path: Path
 ):
-    hook = tmp_path / "libagnocast_heaphook.so"
-    library = tmp_path / "libagnocast.so"
+    hook = tmp_path / "libhermos_heaphook.so"
+    library = tmp_path / "libhermos.so"
     hook.touch()
     library.touch()
     monkeypatch.setenv("LD_PRELOAD", str(hook))
     monkeypatch.setattr(runtime_module, "_malloc_provider_path", lambda: hook)
     monkeypatch.setattr(runtime_module, "_loaded_object_paths", lambda: {hook, library})
 
-    runtime_module._verify_loaded_agnocast()
+    runtime_module._verify_loaded_hermos()
 
 
 def _isolate_device_preflight(monkeypatch, device: Path) -> None:
-    monkeypatch.setenv("AGNOCAST_DEVICE_PATH", str(device))
-    monkeypatch.setenv("AGNOCAST_BRIDGE_MODE", "off")
-    monkeypatch.setenv("AGNOCAST_NO_DISCOVERY_AGENT", "1")
-    monkeypatch.setattr(runtime_module, "_verify_loaded_agnocast", lambda: None)
+    monkeypatch.setenv("HERMOS_DEVICE_PATH", str(device))
+    monkeypatch.setenv("HERMOS_BRIDGE_MODE", "off")
+    monkeypatch.setenv("HERMOS_NO_DISCOVERY_AGENT", "1")
+    monkeypatch.setattr(runtime_module, "_verify_loaded_hermos", lambda: None)
 
 
 def test_device_path_defaults_when_unset_or_empty(monkeypatch):
-    monkeypatch.delenv("AGNOCAST_DEVICE_PATH", raising=False)
-    assert runtime_module._device_path() == Path("/dev/agnocast")
+    monkeypatch.delenv("HERMOS_DEVICE_PATH", raising=False)
+    assert runtime_module._device_path() == Path("/dev/hermos")
 
-    monkeypatch.setenv("AGNOCAST_DEVICE_PATH", "")
-    assert runtime_module._device_path() == Path("/dev/agnocast")
+    monkeypatch.setenv("HERMOS_DEVICE_PATH", "")
+    assert runtime_module._device_path() == Path("/dev/hermos")
 
 
-def test_preflight_accepts_device_selected_by_agnocast_device_path(
+def test_preflight_accepts_device_selected_by_hermos_device_path(
     monkeypatch, tmp_path: Path
 ):
-    device = tmp_path / "agnocast_rclpy"
+    device = tmp_path / "hermos_rclpy"
     device.touch()
     _isolate_device_preflight(monkeypatch, device)
 
@@ -139,7 +139,7 @@ def test_preflight_accepts_device_selected_by_agnocast_device_path(
 
 
 def test_preflight_names_missing_selected_device(monkeypatch, tmp_path: Path):
-    device = tmp_path / "agnocast_rclpy"
+    device = tmp_path / "hermos_rclpy"
     _isolate_device_preflight(monkeypatch, device)
 
     with pytest.raises(RuntimeError, match=re.escape(f"{device} is missing")):

@@ -1,4 +1,4 @@
-#include "agnocast/agnocast.hpp"
+#include "hermos/hermos.hpp"
 #include "ros2_cuda_ipc_core/publisher/gpu_buffer_manager.hpp"
 #include "ros2_cuda_ipc_core/subscriber/buffer_mapper.hpp"
 #include "ros2_cuda_ipc_core/transport/message_utils.hpp"
@@ -69,7 +69,7 @@ void drain(Mapper & mapper)
 
 int publisher(const std::string & topic, std::size_t blocks)
 {
-  agnocast::Node node("g3_gpu_publisher");
+  hermos::Node node("g3_gpu_publisher");
   auto endpoint = node.create_publisher<Message>(topic, 4);
   Manager manager({blocks, 64, 0});
   if (!manager.initialise()) {throw std::runtime_error("GPU pool initialisation failed");}
@@ -146,8 +146,8 @@ int publisher(const std::string & topic, std::size_t blocks)
 
 int subscriber(const std::string & topic, std::size_t limit)
 {
-  agnocast::Node node("g3_gpu_subscriber");
-  auto endpoint = std::make_shared<agnocast::TakeSubscription<Message>>(
+  hermos::Node node("g3_gpu_subscriber");
+  auto endpoint = std::make_shared<hermos::TakeSubscription<Message>>(
     &node, topic, rclcpp::QoS(4));
   auto mapper = std::make_unique<Mapper>(Mapper::Config{limit, 64});
   auto stream = std::make_unique<g3_test::Stream>();
@@ -169,7 +169,7 @@ int subscriber(const std::string & topic, std::size_t limit)
     while (std::getline(std::cin, command)) {
       if (command == "stash" || command == "take") {
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
-        agnocast::ipc_shared_ptr<const Message> message;
+        hermos::ipc_shared_ptr<const Message> message;
         do {
           message = endpoint->take(false);
           if (message) {break;}
@@ -328,7 +328,7 @@ int subscriber(const std::string & topic, std::size_t limit)
   stream->release();
   reads.clear();
   g3_test::check(cudaStreamSynchronize(stream->value));
-  // Keep CUDA/runtime and Agnocast alive until deferred read cleanup completes.
+  // Keep CUDA/runtime and Hermos alive until deferred read cleanup completes.
   drain(*mapper);
   g3_test::check(cudaFreeHost(sample));
   g3_test::check(cudaFree(device_sum));
@@ -342,14 +342,14 @@ int main(int argc, char ** argv)
   bool initialised = false;
   try {
     g3_test::check(cudaSetDevice(0));
-    agnocast::init(0, nullptr);
+    hermos::init(0, nullptr);
     initialised = true;
     const int result = std::string(argv[1]) == "publisher" ?
       publisher(argv[2], std::stoul(argv[3])) : subscriber(argv[2], std::stoul(argv[3]));
-    agnocast::shutdown();
+    hermos::shutdown();
     return result;
   } catch (const std::exception & error) {
-    if (initialised) {agnocast::shutdown();}
+    if (initialised) {hermos::shutdown();}
     std::cerr << "g3_peer: " << error.what() << std::endl;
     return 1;
   }

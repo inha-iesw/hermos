@@ -7,8 +7,8 @@ import threading
 
 import pytest
 
-from rclpy_agnocast import _native
-from rclpy_agnocast.types.message import Message
+from rclpy_hermos import _native
+from rclpy_hermos.types.message import Message
 from write_fault import assert_write_fault
 
 
@@ -140,7 +140,7 @@ def test_unprotected_or_unrecognized_mapping_rejects(
 
 
 def test_same_process_publication_origin_rejects(subscription, torch):
-    name = _native._test_agnocast_shm_name(os.getpid())
+    name = _native._test_hermos_shm_name(os.getpid())
     path = '/dev/shm' + name
     with open(path, 'xb') as output:
         output.write(struct.pack('=6i', *range(10, 16)))

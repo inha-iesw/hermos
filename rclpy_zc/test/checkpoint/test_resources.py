@@ -5,19 +5,19 @@ import pytest
 from checkpoint import resources
 
 
-def mapping(path="/dev/shm/agnocast@21", permissions="r--s", first=0x1000, last=0x2000):
+def mapping(path="/dev/shm/hermos@21", permissions="r--s", first=0x1000, last=0x2000):
     return f"{first:x}-{last:x} {permissions} 00000000 00:01 42 {path}"
 
 
 @pytest.mark.parametrize("suffix", ["", " (deleted)"])
 def test_publisher_mapping_covers_the_entire_payload_including_unlinked_heap(suffix):
-    line = mapping(path="/dev/shm/agnocast@21" + suffix)
+    line = mapping(path="/dev/shm/hermos@21" + suffix)
     assert resources.publisher_mapping([line], 21, 0x1000, 0x1000) == line
 
 
 @pytest.mark.parametrize("line,address,size", [
-    (mapping(path="/dev/shm/agnocast@22"), 0x1000, 8),
-    (mapping(path="/dev/shm/agnocast@210"), 0x1000, 8),
+    (mapping(path="/dev/shm/hermos@22"), 0x1000, 8),
+    (mapping(path="/dev/shm/hermos@210"), 0x1000, 8),
     (mapping(path=""), 0x1000, 8),
     (mapping(permissions="rw-s"), 0x1000, 8),
     (mapping(permissions="r--p"), 0x1000, 8),

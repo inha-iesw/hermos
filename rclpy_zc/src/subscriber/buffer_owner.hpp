@@ -19,7 +19,7 @@
 
 #include "lease.hpp"
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 /**
  * @brief Register the private, non-constructible read-only exporter. Requires the GIL.
@@ -28,4 +28,4 @@ namespace rclpy_agnocast
 int register_readonly_buffer_export_type(PyObject * module) noexcept;
 /** @brief Return a new exporter reference retaining owner, or nullptr with a Python error. */
 PyObject * create_readonly_buffer_export(std::shared_ptr<LeaseBufferOwner> owner) noexcept;
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

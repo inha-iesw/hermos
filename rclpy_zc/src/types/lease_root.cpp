@@ -5,7 +5,7 @@
 #include <utility>
 #include "../subscriber/provenance.hpp"
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace types
 {
@@ -87,4 +87,4 @@ BufferSpan RootLeaseOwner::foreign_readonly_buffer(
   return span;
 }
 }  // namespace types
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

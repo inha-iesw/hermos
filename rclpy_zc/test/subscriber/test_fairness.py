@@ -14,8 +14,8 @@ from rcl_interfaces.srv import GetParameters
 from rclpy.context import Context
 from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 
-from rclpy_agnocast import _native
-from rclpy_agnocast.subscription import Subscription
+from rclpy_hermos import _native
+from rclpy_hermos.subscription import Subscription
 
 from system_runtime import launch_pair, preflight, system_tld_requested
 
@@ -118,7 +118,7 @@ def test_supplied_subscription_yields_to_timer_service_and_sibling_without_overl
 
 def test_native_slow_callback_allows_ros_progress_before_sustained_publisher_stops(tmp_path):
     if not system_tld_requested():
-        pytest.skip("set RCLPY_AGNOCAST_RUN_SYSTEM_TLD=1 for actual fairness TLD")
+        pytest.skip("set RCLPY_HERMOS_RUN_SYSTEM_TLD=1 for actual fairness TLD")
     config = preflight()
     environment = config.child_environment(20 + uuid.uuid4().int % 180)
     environment["ROS_LOG_DIR"] = str(tmp_path / "ros-log")

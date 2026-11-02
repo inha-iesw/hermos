@@ -10,7 +10,7 @@
 #include "../types/lease_root.hpp"
 #include "../types/root.hpp"
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace tensor
 {
@@ -48,5 +48,5 @@ void release_capsule(DLManagedTensor * managed, bool unconsumed) noexcept;
 std::size_t live_managers() noexcept;
 #endif
 }  // namespace tensor
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos
 #endif  // TENSOR__EXPORT_HPP_

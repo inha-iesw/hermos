@@ -18,10 +18,10 @@
 #include "root.hpp"
 #include "lease_root.hpp"
 #include "../subscriber/queue.hpp"
-#include "rclpy_agnocast/types/field_ops.hpp"
+#include "rclpy_hermos/types/field_ops.hpp"
 
 namespace py = pybind11;
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace types
 {
@@ -378,4 +378,4 @@ void bind_typed_testing(py::module_ & module)
     py::overload_cast<bool>(&TestTypedPublisher::fail_publish));
 }
 }  // namespace types
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

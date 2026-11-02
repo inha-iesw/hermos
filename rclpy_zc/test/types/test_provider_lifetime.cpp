@@ -9,17 +9,17 @@
 #include <string>
 #include <typeinfo>
 
-#include "rclpy_agnocast/types/adapter.hpp"
+#include "rclpy_hermos/types/adapter.hpp"
 
 namespace
 {
-using rclpy_agnocast::types::check_status;
-using rclpy_agnocast::types::ErrorCode;
-using rclpy_agnocast::types::NativeEndpoint;
-using rclpy_agnocast::types::ProviderDescriptor;
-using rclpy_agnocast::types::register_provider;
-using rclpy_agnocast::types::registered_type;
-using rclpy_agnocast::types::Status;
+using rclpy_hermos::types::check_status;
+using rclpy_hermos::types::ErrorCode;
+using rclpy_hermos::types::NativeEndpoint;
+using rclpy_hermos::types::ProviderDescriptor;
+using rclpy_hermos::types::register_provider;
+using rclpy_hermos::types::registered_type;
+using rclpy_hermos::types::Status;
 
 using Library = std::unique_ptr<void, int (*)(void *)>;
 

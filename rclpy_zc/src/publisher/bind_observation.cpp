@@ -15,10 +15,10 @@
 #include <pybind11/pybind11.h>
 
 #include "observation.hpp"
-#include "rclpy_agnocast/bindings.hpp"
-#include "rclpy_agnocast/loan.hpp"
+#include "rclpy_hermos/bindings.hpp"
+#include "rclpy_hermos/loan.hpp"
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 void bind_observation(pybind11::module_ & module)
 {
@@ -61,4 +61,4 @@ void bind_observation(pybind11::module_ & module)
       return result;
     });
 }
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

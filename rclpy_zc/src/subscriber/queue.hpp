@@ -24,7 +24,7 @@
 
 #include "lease.hpp"
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 /** @brief One locked snapshot; outstanding includes queued, delivered and exported storage. */
 struct SubscriberStats
@@ -91,4 +91,4 @@ private:
   std::exception_ptr failure_;
   std::condition_variable wake_;
 };
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

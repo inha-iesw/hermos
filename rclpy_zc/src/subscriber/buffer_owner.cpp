@@ -18,7 +18,7 @@
 #include <new>
 #include <utility>
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace
 {
@@ -61,7 +61,7 @@ PyType_Slot slots[] = {
   {0, nullptr},
 };
 PyType_Spec spec = {
-  "rclpy_agnocast._native._ReadonlyBufferExport",
+  "rclpy_hermos._native._ReadonlyBufferExport",
   static_cast<int>(sizeof(ReadonlyBufferExportObject)),
   0,
   Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION | Py_TPFLAGS_IMMUTABLETYPE,
@@ -123,4 +123,4 @@ PyObject * create_readonly_buffer_export(std::shared_ptr<LeaseBufferOwner> owner
   }
   return reinterpret_cast<PyObject *>(token);
 }
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

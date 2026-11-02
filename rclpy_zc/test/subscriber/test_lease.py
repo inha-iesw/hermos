@@ -8,7 +8,7 @@ import threading
 import numpy as np
 import pytest
 
-from rclpy_agnocast import _native
+from rclpy_hermos import _native
 
 
 def endpoint(count=2, limit=16):

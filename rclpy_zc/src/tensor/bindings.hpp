@@ -5,7 +5,7 @@
 #include <pybind11/pybind11.h>
 #include "export.hpp"
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace tensor
 {
@@ -28,5 +28,5 @@ pybind11::capsule subscriber_capsule(
   std::uint64_t generation, pybind11::handle shape);
 void discard_capsule(pybind11::handle capsule);
 }  // namespace tensor
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos
 #endif  // TENSOR__BINDINGS_HPP_

@@ -19,7 +19,7 @@
 
 #include "queue.hpp"
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 LeaseBufferOwner::LeaseBufferOwner(
   ReceivedBuffer buffer, std::shared_ptr<SubscriberBudget> budget)
@@ -58,4 +58,4 @@ void LeaseState::release() noexcept
     released = std::move(owner_);
   }
 }
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

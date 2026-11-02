@@ -16,7 +16,7 @@ from urllib.parse import quote
 
 
 EVENT_PREFIX = "EVENT "
-SYSTEM_TLD_ENV = "RCLPY_AGNOCAST_RUN_SYSTEM_TLD"
+SYSTEM_TLD_ENV = "RCLPY_HERMOS_RUN_SYSTEM_TLD"
 _WORKSPACE = Path(__file__).resolve().parents[2]
 
 
@@ -41,9 +41,9 @@ class SystemConfig:
     def child_environment(self, domain_id: int) -> dict[str, str]:
         """Build a fresh-process environment with the selected fork first."""
         environment = os.environ.copy()
-        environment["AGNOCAST_BRIDGE_MODE"] = "off"
-        environment["AGNOCAST_NO_DISCOVERY_AGENT"] = "1"
-        environment["AGNOCAST_DEVICE_PATH"] = str(self.device)
+        environment["HERMOS_BRIDGE_MODE"] = "off"
+        environment["HERMOS_NO_DISCOVERY_AGENT"] = "1"
+        environment["HERMOS_DEVICE_PATH"] = str(self.device)
         environment["ROS_DOMAIN_ID"] = str(domain_id)
         environment["PYTHONUNBUFFERED"] = "1"
         environment["RCUTILS_COLORIZED_OUTPUT"] = "0"
@@ -86,9 +86,9 @@ def _required_file(variable: str, default: Path) -> Path:
 
 
 def _subscriber_path() -> Path:
-    configured = os.environ.get("RCLPY_AGNOCAST_SUBSCRIBER")
+    configured = os.environ.get("RCLPY_HERMOS_SUBSCRIBER")
     candidates = [Path(configured)] if configured else [
-        _WORKSPACE / "build/rclpy_agnocast/rclpy_agnocast_shared_buffer_subscriber",
+        _WORKSPACE / "build/hermos/verify/rclpy_hermos/rclpy_hermos_shared_buffer_subscriber",
     ]
     for candidate in candidates:
         if candidate.is_file() and os.access(candidate, os.X_OK):
@@ -122,13 +122,13 @@ def _device_numbers(device: Path, module: str) -> tuple[int, int]:
             if "=" in line
         )
     except (OSError, ValueError) as error:
-        raise PreflightError("cannot read the Agnocast sysfs device identity") from error
+        raise PreflightError("cannot read the Hermos sysfs device identity") from error
     if sysfs_numbers != numbers:
         raise PreflightError(
             f"device/sysfs major/minor mismatch: {numbers} != {sysfs_numbers}"
         )
     if uevent.get("DEVNAME") != module or uevent.get("DEVMODE") != "0666":
-        raise PreflightError(f"unexpected Agnocast uevent identity/mode: {uevent}")
+        raise PreflightError(f"unexpected Hermos uevent identity/mode: {uevent}")
     if stat.S_IMODE(metadata.st_mode) != int(uevent["DEVMODE"], 8):
         raise PreflightError(f"{device} mode does not match its uevent")
     return numbers
@@ -139,7 +139,7 @@ def _verify_shm_rw() -> None:
     if not root.is_dir() or not os.access(root, os.R_OK | os.W_OK | os.X_OK):
         raise PreflightError("/dev/shm is not a readable and writable directory")
     try:
-        with tempfile.NamedTemporaryFile(prefix="rclpy_agnocast_", dir=root) as probe:
+        with tempfile.NamedTemporaryFile(prefix="rclpy_hermos_", dir=root) as probe:
             probe.write(b"x")
             probe.flush()
     except OSError as error:
@@ -178,19 +178,19 @@ def _verify_kmod(kmod: Path, module: str) -> str:
 def preflight() -> SystemConfig:
     """Validate the exact device and fork artifact set before child launch."""
     kmod = _required_file(
-        "RCLPY_AGNOCAST_KMOD", _WORKSPACE / "agnocast/agnocast_kmod/agnocast_rclpy.ko"
+        "RCLPY_HERMOS_KMOD", _WORKSPACE / "build/hermos/device-arm64/kmod/hermos_rclpy.ko"
     )
     hook = _required_file(
-        "RCLPY_AGNOCAST_HEAPHOOK",
-        _WORKSPACE / "agnocast/install/agnocastlib/lib/libagnocast_heaphook.so",
+        "RCLPY_HERMOS_HEAPHOOK",
+        _WORKSPACE / "build/hermos/device-arm64/lib/libhermos_heaphook.so",
     )
     library = _required_file(
-        "RCLPY_AGNOCAST_LIBRARY", hook.with_name("libagnocast.so")
+        "RCLPY_HERMOS_LIBRARY", hook.with_name("libhermos.so")
     )
-    if library != hook.with_name("libagnocast.so"):
-        raise PreflightError("heaphook and libagnocast.so must be sibling artifacts")
+    if library != hook.with_name("libhermos.so"):
+        raise PreflightError("heaphook and libhermos.so must be sibling artifacts")
     publisher_process = _required_file(
-        "RCLPY_AGNOCAST_PUBLISHER_PROCESS",
+        "RCLPY_HERMOS_PUBLISHER_PROCESS",
         Path(__file__).resolve().parent / "processes/publisher_process.py",
     )
     subscriber = _subscriber_path()

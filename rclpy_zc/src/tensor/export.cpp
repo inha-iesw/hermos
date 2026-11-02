@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace tensor
 {
@@ -197,4 +197,4 @@ DLManagedTensor * export_dlpack(
   return finish(std::move(result), span, type);
 }
 }  // namespace tensor
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

@@ -3,7 +3,7 @@
 from threading import Condition, RLock
 from types import SimpleNamespace
 
-from rclpy_agnocast import AgnocastRuntime
+from rclpy_hermos import HermosRuntime
 
 
 class Guard:
@@ -53,7 +53,7 @@ class Node:
 
 def runtime_for_test(native_runtime, node):
     """Build an unregistered runtime; the calling test owns patching and cleanup."""
-    runtime = AgnocastRuntime.__new__(AgnocastRuntime)
+    runtime = HermosRuntime.__new__(HermosRuntime)
     runtime._closed = False
     runtime._closing = False
     runtime._native_runtime = native_runtime

@@ -8,7 +8,7 @@
 #include "../tensor/bindings.hpp"
 
 namespace py = pybind11;
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace types
 {
@@ -121,4 +121,4 @@ void bind_lease_root(py::module_ & module)
 #endif
 }
 }  // namespace types
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

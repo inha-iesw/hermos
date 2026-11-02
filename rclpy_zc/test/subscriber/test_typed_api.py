@@ -7,9 +7,9 @@ from types import SimpleNamespace
 import pytest
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
-from rclpy_agnocast.subscription.limits import SubscriptionLimits
-from rclpy_agnocast.types.message import Message
-from rclpy_agnocast.types.publisher import TypedPublisher
+from rclpy_hermos.subscription.limits import SubscriptionLimits
+from rclpy_hermos.types.message import Message
+from rclpy_hermos.types.publisher import TypedPublisher
 from subscriber.fakes import runtime_for_test
 
 
@@ -88,7 +88,7 @@ def make_runtime():
     ({'limits': None}, TypeError), ({'callback_group': object()}, TypeError),
 ])
 def test_invalid_arguments_do_not_resolve_or_create_endpoint(monkeypatch, change, error):
-    from rclpy_agnocast import types
+    from rclpy_hermos import types
 
     monkeypatch.setattr(types, 'resolve_adapter', lambda value: pytest.fail('discovery called'))
     runtime = make_runtime()
@@ -102,7 +102,7 @@ def test_invalid_arguments_do_not_resolve_or_create_endpoint(monkeypatch, change
 
 
 def test_async_generator_is_rejected_before_discovery(monkeypatch):
-    from rclpy_agnocast import types
+    from rclpy_hermos import types
 
     async def callback(message):
         yield message
@@ -116,8 +116,8 @@ def test_async_generator_is_rejected_before_discovery(monkeypatch):
 
 
 def test_runtime_passes_all_limits_and_group_under_lifecycle_lock(monkeypatch):
-    from rclpy_agnocast import types
-    from rclpy_agnocast.subscription import typed
+    from rclpy_hermos import types
+    from rclpy_hermos.subscription import typed
 
     runtime = make_runtime()
     message_type, handle, endpoint = object(), object(), object()
@@ -161,20 +161,20 @@ def test_runtime_passes_all_limits_and_group_under_lifecycle_lock(monkeypatch):
 @pytest.mark.parametrize('kind', ['publisher', 'subscription'])
 def test_gpu_factory_requires_explicit_runtime_before_creating_native_endpoint(monkeypatch, kind):
     import sys
-    from rclpy_agnocast import types
+    from rclpy_hermos import types
 
     runtime = make_runtime()
     monkeypatch.setattr(types, 'resolve_adapter',
-                        lambda _: {'ros_type': 'rclpy_agnocast_gpu_msgs/msg/GpuTensor'})
+                        lambda _: {'ros_type': 'rclpy_hermos_gpu_msgs/msg/GpuTensor'})
 
     def current():
         raise RuntimeError('GpuRuntime must be explicitly initialised first')
 
-    monkeypatch.setitem(sys.modules, 'rclpy_agnocast_gpu.runtime',
+    monkeypatch.setitem(sys.modules, 'rclpy_hermos_gpu.runtime',
                         SimpleNamespace(current_runtime=current))
-    monkeypatch.setitem(sys.modules, 'rclpy_agnocast_gpu.endpoint.publisher',
+    monkeypatch.setitem(sys.modules, 'rclpy_hermos_gpu.endpoint.publisher',
                         SimpleNamespace(TensorPublisher=object))
-    monkeypatch.setitem(sys.modules, 'rclpy_agnocast_gpu.endpoint.subscription',
+    monkeypatch.setitem(sys.modules, 'rclpy_hermos_gpu.endpoint.subscription',
                         SimpleNamespace(TensorSubscription=object))
     runtime._native_runtime.create_typed_publisher = lambda *args: pytest.fail('created publisher')
     runtime._native_runtime.create_typed_subscription = lambda *args: pytest.fail('created subscriber')

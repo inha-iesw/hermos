@@ -5,20 +5,20 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-#include "rclpy_agnocast/types/field_ops.hpp"
+#include "rclpy_hermos/types/field_ops.hpp"
 
 namespace
 {
-using rclpy_agnocast::types::array_ops;
-using rclpy_agnocast::types::BufferSpan;
-using rclpy_agnocast::types::error_status;
-using rclpy_agnocast::types::ErrorCode;
-using rclpy_agnocast::types::FieldRef;
-using rclpy_agnocast::types::scalar_ops;
-using rclpy_agnocast::types::ScalarValue;
-using rclpy_agnocast::types::sequence_ops;
-using rclpy_agnocast::types::Status;
-using rclpy_agnocast::types::string_ops;
+using rclpy_hermos::types::array_ops;
+using rclpy_hermos::types::BufferSpan;
+using rclpy_hermos::types::error_status;
+using rclpy_hermos::types::ErrorCode;
+using rclpy_hermos::types::FieldRef;
+using rclpy_hermos::types::scalar_ops;
+using rclpy_hermos::types::ScalarValue;
+using rclpy_hermos::types::sequence_ops;
+using rclpy_hermos::types::Status;
+using rclpy_hermos::types::string_ops;
 
 TEST(FieldOperations, NarrowIntegerRejectsOverflowWithoutChangingValue)
 {

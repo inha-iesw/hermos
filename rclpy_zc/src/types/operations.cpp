@@ -1,9 +1,9 @@
 // Copyright 2026 rclpy zerocopy maintainers
 // SPDX-License-Identifier: Apache-2.0
-#include "rclpy_agnocast/types/operations.hpp"
+#include "rclpy_hermos/types/operations.hpp"
 #include <new>
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace types
 {
@@ -19,4 +19,4 @@ void check_status(const Status & status)
   }
 }
 }  // namespace types
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

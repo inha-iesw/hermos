@@ -21,7 +21,7 @@
 #include "../types/lease_root.hpp"
 
 namespace py = pybind11;
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 #ifdef BUILD_TESTING
 void bind_subscriber_testing(py::module_ & module);
@@ -132,4 +132,4 @@ void bind_subscriber(py::module_ & module)
   bind_subscriber_testing(module);
 #endif
 }
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

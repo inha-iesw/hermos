@@ -7,9 +7,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from rclpy_agnocast import _native
-from rclpy_agnocast.types.message import Message
-from rclpy_agnocast.types.publisher import TypedPublisher
+from rclpy_hermos import _native
+from rclpy_hermos.types.message import Message
+from rclpy_hermos.types.publisher import TypedPublisher
 from subscriber.fakes import runtime_for_test
 
 
@@ -242,7 +242,7 @@ def test_runtime_routes_resolved_type_and_checks_closed_before_native(endpoints,
         requested.append(args)
         return handle
 
-    monkeypatch.setattr('rclpy_agnocast.types.resolve_adapter', resolve)
+    monkeypatch.setattr('rclpy_hermos.types.resolve_adapter', resolve)
     runtime._native_runtime = SimpleNamespace(create_typed_publisher=create)
     try:
         typed = runtime.create_typed_publisher(

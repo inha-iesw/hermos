@@ -9,8 +9,8 @@ import time
 import numpy as np
 import pytest
 
-from rclpy_agnocast import Publisher
-from rclpy_agnocast import _native
+from rclpy_hermos import Publisher
+from rclpy_hermos import _native
 
 
 def _buffer_address(view: memoryview) -> int:

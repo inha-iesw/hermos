@@ -15,7 +15,7 @@ from write_fault import assert_write_fault
 def publisher_commands(node, message_type, topic, qos):
     """Fill the actual native Image data storage through a writable Tensor."""
     publisher = node.create_publisher(
-        message_type, topic, qos, transport='agnocast', max_message_bytes=65536)
+        message_type, topic, qos, transport='hermos', max_message_bytes=65536)
     emit('READY', pid=os.getpid())
     for command in sys.stdin:
         words = command.split()
@@ -72,7 +72,7 @@ def subscriber_commands(node, message_type, topic, qos):
     """Keep only a derived Tensor when testing retained-budget and close retry."""
     from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
     from rclpy.executors import SingleThreadedExecutor
-    from rclpy_agnocast import SubscriptionLimits
+    from rclpy_hermos import SubscriptionLimits
 
     held, pending, errors = [], [], []
     received = 0
@@ -122,7 +122,7 @@ def subscriber_commands(node, message_type, topic, qos):
                             readonly=True))
 
     subscription = node.create_subscription(
-        message_type, topic, callback, qos, transport='agnocast', callback_group=group,
+        message_type, topic, callback, qos, transport='hermos', callback_group=group,
         limits=SubscriptionLimits(max_messages=1, max_retained_bytes=65536,
                                   max_message_bytes=65536))
 
@@ -222,7 +222,7 @@ def main():
     args = parser.parse_args()
     import rclpy
     from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
-    from rclpy_agnocast import Node
+    from rclpy_hermos import Node
     from sensor_msgs.msg import Image
 
     rclpy.init(args=[])

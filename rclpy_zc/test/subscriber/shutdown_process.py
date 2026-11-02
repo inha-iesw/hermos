@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 import rclpy
 
-from rclpy_agnocast import AgnocastRuntime, _native
-from rclpy_agnocast.subscription import Subscription
+from rclpy_hermos import HermosRuntime, _native
+from rclpy_hermos.subscription import Subscription
 
 
 LIVE = []
@@ -36,7 +36,7 @@ def main():
 
     topic = f"/shutdown_{os.getpid()}"
     if arguments.backend == "native":
-        owner = AgnocastRuntime(node)
+        owner = HermosRuntime(node)
         subscription = owner.create_subscription(
             topic, callback, depth=2, max_payload_bytes=16,
         )

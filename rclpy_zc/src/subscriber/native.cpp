@@ -29,16 +29,16 @@
 #include <vector>
 
 #include "executor.hpp"
-#include "agnocast/node/agnocast_node.hpp"
-#include "rclpy_agnocast_msgs/msg/shared_buffer.hpp"
+#include "hermos/node/hermos_node.hpp"
+#include "rclpy_hermos_msgs/msg/shared_buffer.hpp"
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace
 {
-using Message = rclpy_agnocast_msgs::msg::SharedBuffer;
-using NativeMessage = agnocast::ipc_shared_ptr<const Message>;
-using NativeSubscription = agnocast::Subscription<Message>;
+using Message = rclpy_hermos_msgs::msg::SharedBuffer;
+using NativeMessage = hermos::ipc_shared_ptr<const Message>;
+using NativeSubscription = hermos::Subscription<Message>;
 
 #ifdef BUILD_TESTING
 struct ObservationState
@@ -192,7 +192,7 @@ public:
 class SubscriberRuntime::Impl
 {
 public:
-  Impl(std::shared_ptr<agnocast::Node> value, std::shared_ptr<void> session)
+  Impl(std::shared_ptr<hermos::Node> value, std::shared_ptr<void> session)
   : native_session(std::move(session)), node(std::move(value)),
     executor(std::make_unique<SubscriberExecutor>(node)) {}
 
@@ -212,7 +212,7 @@ public:
                 node.get(), topic.c_str(), depth, &state->group, state.get(),
                 &SubscriptionState::receive_typed, &state->typed_subscription.endpoint));
           } else {
-            agnocast::SubscriptionOptions options;
+            hermos::SubscriptionOptions options;
             options.callback_group = state->group;
             const std::weak_ptr<SubscriptionState> weak = state;
             state->subscription = node->create_subscription<Message>(
@@ -263,7 +263,7 @@ public:
   }
 
   std::shared_ptr<void> native_session;
-  std::shared_ptr<agnocast::Node> node;
+  std::shared_ptr<hermos::Node> node;
   std::mutex mutex;
   std::vector<std::shared_ptr<SubscriptionState>> states;
   std::unique_ptr<SubscriberExecutor> executor;
@@ -271,7 +271,7 @@ public:
 };
 
 SubscriberRuntime::SubscriberRuntime(
-  std::shared_ptr<agnocast::Node> node, std::shared_ptr<void> native_session)
+  std::shared_ptr<hermos::Node> node, std::shared_ptr<void> native_session)
 : impl_(std::make_unique<Impl>(std::move(node), std::move(native_session))) {}
 
 SubscriberRuntime::~SubscriberRuntime() {(void)close();}
@@ -466,4 +466,4 @@ SubscriberObservation SubscriptionHandle::observation() const
   return state_->observation->value;
 }
 #endif
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

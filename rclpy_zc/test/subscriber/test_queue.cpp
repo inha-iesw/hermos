@@ -24,11 +24,11 @@
 #include <vector>
 
 #include "subscriber/queue.hpp"
-#include "rclpy_agnocast/types/adapter.hpp"
+#include "rclpy_hermos/types/adapter.hpp"
 
 namespace
 {
-using rclpy_agnocast::SubscriberQueue;
+using rclpy_hermos::SubscriberQueue;
 const std::uint8_t payload[]{1, 2, 3, 4, 5, 6, 7};
 
 TEST(SubscriberQueue, WakeCoalescesUntilDrainFinishesAndRearmsAfterEmpty)
@@ -232,10 +232,10 @@ TEST(SubscriberQueue, ConcurrentProducersAndConsumerRespectBoundsAndReleaseEvery
 TEST(SubscriberQueue, TypedAdmissionSeparatesCountBytesAndSingleMessageLimits)
 {
   SubscriberQueue queue(2, 15, 10);
-  auto type = std::make_shared<rclpy_agnocast::types::TypeDescriptor>();
+  auto type = std::make_shared<rclpy_hermos::types::TypeDescriptor>();
   auto storage = std::make_shared<int>(0);
   auto input = [&](std::size_t bytes) {
-      rclpy_agnocast::ReceivedBuffer value{0, nullptr, bytes, storage};
+      rclpy_hermos::ReceivedBuffer value{0, nullptr, bytes, storage};
       value.typed_root = storage.get();
       value.descriptor = type;
       return value;

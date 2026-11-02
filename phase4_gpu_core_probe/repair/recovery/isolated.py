@@ -13,7 +13,7 @@ from control import write_pipe
 
 
 BOOTSTRAP = Path('/usr/local/libexec/rclpy-zc-gpu/namespace-bootstrap.py')
-REQUIRED_ENVIRONMENT = {'AGNOCAST_BRIDGE_MODE': 'off', 'AGNOCAST_NO_DISCOVERY_AGENT': '1'}
+REQUIRED_ENVIRONMENT = {'HERMOS_BRIDGE_MODE': 'off', 'HERMOS_NO_DISCOVERY_AGENT': '1'}
 
 
 def trusted_bootstrap():
@@ -33,7 +33,7 @@ class IsolatedEpoch:
 
     Peers remain direct children of the worker. The caller may send stdin lines
     and inspect peer logs, but must not wait or reap peers or the worker itself.
-    All GPU holders and Agnocast communication peers must be inside this epoch.
+    All GPU holders and Hermos communication peers must be inside this epoch.
     """
 
     def __init__(self, commands, stage, startup_timeout=10.0, stop_timeout=5.0):
@@ -45,7 +45,7 @@ class IsolatedEpoch:
         for command in commands:
             environment = {**os.environ, **command.get('env', {})}
             if any(environment.get(key) != value for key, value in REQUIRED_ENVIRONMENT.items()):
-                raise ValueError('isolated peers require AGNOCAST_BRIDGE_MODE=off and AGNOCAST_NO_DISCOVERY_AGENT=1')
+                raise ValueError('isolated peers require HERMOS_BRIDGE_MODE=off and HERMOS_NO_DISCOVERY_AGENT=1')
         self.stage = Path(stage)
         if not self.stage.is_absolute() or self.stage.resolve().is_relative_to('/dev/shm'):
             raise ValueError('stage must be absolute and outside /dev/shm')

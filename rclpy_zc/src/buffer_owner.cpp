@@ -1,17 +1,17 @@
-#include "rclpy_agnocast/buffer_owner.hpp"
+#include "rclpy_hermos/buffer_owner.hpp"
 
-#include "rclpy_agnocast/loan.hpp"
+#include "rclpy_hermos/loan.hpp"
 
 #include <cstddef>
 #include <new>
 #include <utility>
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace
 {
 
-constexpr char kExportTypeName[] = "rclpy_agnocast._native._WritableBufferExport";
+constexpr char kExportTypeName[] = "rclpy_hermos._native._WritableBufferExport";
 constexpr char kExportModuleName[] = "_WritableBufferExport";
 
 struct WritableBufferExportObject
@@ -196,4 +196,4 @@ PyObject * create_writable_buffer_export(std::shared_ptr<LoanState> state) noexc
   return reinterpret_cast<PyObject *>(token);
 }
 
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos

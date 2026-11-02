@@ -15,7 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 RUNNER = Path(__file__).with_name('run_device.py')
-MODULE = '/sys/module/agnocast_rclpy'
+MODULE = '/sys/module/hermos_rclpy'
 HOST_RUN = subprocess.run
 HOST_POPEN = subprocess.Popen
 
@@ -39,7 +39,7 @@ def block_unmocked_processes(monkeypatch):
     for name in ('read_text', 'read_bytes'):
         original = getattr(Path, name)
         def guarded_read(path, *args, _read=original, **kwargs):
-            if path.is_relative_to(ROOT / 'build/g2-device-arm64') or str(path).startswith('/sys/'):
+            if path.is_relative_to(ROOT / 'build/hermos/device-arm64') or str(path).startswith('/sys/'):
                 pytest.fail('host regression attempted to read real device artifacts')
             return _read(path, *args, **kwargs)
         monkeypatch.setattr(Path, name, guarded_read)
@@ -53,13 +53,13 @@ def run_simulated(monkeypatch, tmp_path, counts=(0,), test_code=0, removal=0,
         stage.mkdir()
         (stage / 'device-session.json').write_text('existing evidence\n')
         (stage / 'device-tests.log').write_text('existing test log\n')
-    artifact_root = ROOT / 'build/g2-device-arm64'
+    artifact_root = ROOT / 'build/hermos/device-arm64'
     artifact = bytes(18) + (183).to_bytes(2, 'little')
     source_data = b'simulated source'
     manifest = {
         'kernel': 'simulated-kernel', 'architecture': 'aarch64',
         'vermagic': 'simulated-vermagic', 'srcversion': 'simulated-srcversion',
-        'artifacts': {'kmod/agnocast_rclpy.ko': {
+        'artifacts': {'kmod/hermos_rclpy.ko': {
             'sha256': hashlib.sha256(artifact).hexdigest(),
             'bytes': len(artifact), 'elf_machine': 183}}}
     source = {'loaded_agnocast_srcversion': 'preexisting-srcversion',
@@ -90,7 +90,7 @@ def run_simulated(monkeypatch, tmp_path, counts=(0,), test_code=0, removal=0,
         return read_text(path, *args, **kwargs)
 
     def simulated_bytes(path):
-        if path == artifact_root / 'kmod/agnocast_rclpy.ko':
+        if path == artifact_root / 'kmod/hermos_rclpy.ko':
             return artifact + b'corrupt' if corrupt else artifact
         if path == ROOT / 'simulated-source':
             return source_data
@@ -102,7 +102,7 @@ def run_simulated(monkeypatch, tmp_path, counts=(0,), test_code=0, removal=0,
         return glob(path, pattern)
 
     def simulated_exists(path):
-        if str(path) in (MODULE, '/dev/agnocast_rclpy'):
+        if str(path) in (MODULE, '/dev/hermos_rclpy'):
             return state['loaded']
         if str(path) == '/sys/module/agnocast':
             return state['host_version'] is not None
@@ -115,7 +115,7 @@ def run_simulated(monkeypatch, tmp_path, counts=(0,), test_code=0, removal=0,
             state['calls'].append('insmod')
             state['loaded'] = True
             return SimpleNamespace(returncode=0)
-        if command == ['sudo', '-n', 'rmmod', 'agnocast_rclpy']:
+        if command == ['sudo', '-n', 'rmmod', 'hermos_rclpy']:
             state['calls'].append('rmmod')
             assert state['last_count'] == 0, 'unload attempted while device is held'
             if removal == 'oserror':

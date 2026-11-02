@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 
-from rclpy_agnocast import _native
+from rclpy_hermos import _native
 
 from publisher_observation_lifecycle import run_lifecycle_case
 

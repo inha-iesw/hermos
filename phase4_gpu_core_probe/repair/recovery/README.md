@@ -1,5 +1,10 @@
 # Owned GPU peer recovery
 
+> Naming migration: these commands use HERMOS. Existing EVIDENCE and device logs
+> describe the pre-rename Agnocast binaries. Rebuild all peers/providers and the
+> device artifact bundle at `build/hermos/device-arm64` before a new device run;
+> do not reuse or relabel the old G2 manifest. See the [migration guide](../../../README.md).
+
 This README is the authoritative operational contract for the recovery CLI and
 API. The parent README and plans summarize it; [EVIDENCE.md](../EVIDENCE.md)
 records the exact source revisions, executed scenarios and their limits.
@@ -52,8 +57,8 @@ or turn the probe package into a production GPU runtime.
 ## Supported peer group
 
 The group must contain every holder of its GPU publications/imports and every
-Agnocast peer that communicates with it. Outside peers must not share its GPU
-publications or Agnocast IPC. The FD sockets under `/tmp` remain in a shared
+HERMOS peer that communicates with it. Outside peers must not share its GPU
+publications or HERMOS IPC. The FD sockets under `/tmp` remain in a shared
 filesystem and have no peer-credential admission policy: this is a contract among
 trusted peers, not a security boundary against another process with the same UID.
 Attaching to external processes, forking GPU users, entering another namespace,
@@ -71,15 +76,15 @@ policy and must exit naturally.
 The supported commands are direct executables implementing the registration
 protocol, currently the probe peers. `ros2 run`, `ros2 launch`, stock nodes and
 G1/G2 peers without that protocol are not supported launch forms. Every peer's
-effective environment must contain `AGNOCAST_BRIDGE_MODE=off` and
-`AGNOCAST_NO_DISCOVERY_AGENT=1`; `IsolatedEpoch` rejects missing or different
+effective environment must contain `HERMOS_BRIDGE_MODE=off` and
+`HERMOS_NO_DISCOVERY_AGENT=1`; `IsolatedEpoch` rejects missing or different
 values before creating a stage. The checked environment includes inherited
 variables plus each command's overrides. Bridge/discovery child lifetimes have
 not been adopted under this contract. DDS connectivity within or across epochs
-is also unvalidated; the Agnocast/GPU restriction is not a DDS transport policy.
+is also unvalidated; the HERMOS/GPU restriction is not a DDS transport policy.
 
 `LD_PRELOAD` belongs in each command's `env`, never in the supervisor environment.
-The worker itself must not initialise Agnocast: its registration would keep the
+The worker itself must not initialise HERMOS: its registration would keep the
 unlink daemon alive. Peer environments inherit the caller environment over a pipe
 after privilege drop; the inherited environment is not written to evidence files.
 The bootstrap measures the existing `/dev/shm` capacity itself before isolating
@@ -104,9 +109,9 @@ operational entry point is the isolated CLI or `IsolatedEpoch` below.
 ```json
 {"commands": [
   {"argv": ["/absolute/publisher", "arg"], "env": {
-    "AGNOCAST_BRIDGE_MODE": "off", "AGNOCAST_NO_DISCOVERY_AGENT": "1"}},
+    "HERMOS_BRIDGE_MODE": "off", "HERMOS_NO_DISCOVERY_AGENT": "1"}},
   {"argv": ["/absolute/subscriber", "arg"], "env": {
-    "AGNOCAST_BRIDGE_MODE": "off", "AGNOCAST_NO_DISCOVERY_AGENT": "1"}}
+    "HERMOS_BRIDGE_MODE": "off", "HERMOS_NO_DISCOVERY_AGENT": "1"}}
 ]}
 ```
 
@@ -167,7 +172,7 @@ writes are nonblocking with deadlines, so a peer that stops reading cannot freez
 the cleanup monitor. A control failure still attempts EOF and complete teardown,
 records the error, and forbids retry.
 
-After Group has waited every direct peer, the worker waits for adopted Agnocast
+After Group has waited every direct peer, the worker waits for adopted HERMOS
 unlink daemons to exit naturally with status zero and for `waitpid` to report
 `ECHILD`. It never kills a daemon. A timeout, abnormal daemon exit, incomplete
 registration or cleanup failure forbids a new epoch. The outer owner pins the
@@ -200,23 +205,27 @@ period can reject otherwise normal cleanup; the tested default is five seconds.
 A teardown timeout means incomplete cleanup and never permission to restart;
 an observation-only `wait(timeout=...)` leaves the epoch running and owned.
 
-The [G4 Python launcher](../../../rclpy_agnocast_gpu/README.md) connects TERM to
+The [G4 Python launcher](../../../rclpy_hermos_gpu/README.md) connects TERM to
 dispatch stop → mapper seal/drain → producer close → CUDA teardown. Its peer
 deadline is three seconds with the tested five-second supervisor TERM budget.
 Terminal poison becomes a nonzero peer exit even without callbacks; one explicit
 GPU runtime setup and registration precedes spin, and reinitialisation is rejected.
 Its actual Tensor/async shutdown and inside/outside-epoch DDS tests are recorded in
-[G4 EVIDENCE](../../../rclpy_agnocast_gpu/EVIDENCE.md). Fast DDS across separate shm
+[G4 EVIDENCE](../../../rclpy_hermos_gpu/EVIDENCE.md). Fast DDS across separate shm
 mounts needs the explicitly selected profile documented there.
 
 This supervisor remains source-tree-only. Its installable package boundary must
 be decided and revalidated before a release that runs without this source tree.
-Resource-free registered launchers and general ROS launch remain unsupported;
-the root-owned bootstrap must not move into a caller-writable colcon install.
+General resource-free launchers and ROS launch remain unsupported. The narrow
+[G5 CPU benchmark](../../../experiments/g5/cpu_latency/README.md) creates endpoints,
+atomically registers an empty GPU inventory, waits for ACK before dispatch, and
+closes its executor/Node/context before exit. This benchmark-only direct peer is
+not a general CPU launcher; the supervisor registration contract is unchanged.
+The root-owned bootstrap must not move into a caller-writable colcon install.
 
 Runtime IPC events leave driver-owned objects on the tested CUDA combination;
 see [the standalone diagnostics](../residency/README.md). They and the fixed
-Agnocast type registry remain inside the epoch's tmpfs until its final holder
+HERMOS type registry remain inside the epoch's tmpfs until its final holder
 exits. No driver name is manually unlinked, no CUDA reset is used, and no mount or
 namespace FD is exported to the owner. The kernel releases the private mount
 after the worker and descendants exit. Evidence inventories private residue before

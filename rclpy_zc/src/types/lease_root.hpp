@@ -8,7 +8,7 @@
 #include "root.hpp"
 #include "../subscriber/lease.hpp"
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace types
 {
@@ -34,5 +34,5 @@ private:
   const std::shared_ptr<LeaseBufferOwner> owner_;
 };
 }  // namespace types
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos
 #endif  // TYPES__LEASE_ROOT_HPP_

@@ -8,8 +8,8 @@ import struct
 import numpy as np
 import pytest
 
-from rclpy_agnocast import _native
-from rclpy_agnocast.types.message import Message
+from rclpy_hermos import _native
+from rclpy_hermos.types.message import Message
 
 
 def endpoint(count=4, retained=1000000, maximum=1000000):

@@ -9,10 +9,10 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include "rclpy_agnocast/loan.hpp"
-#include "rclpy_agnocast/types/adapter.hpp"
+#include "rclpy_hermos/loan.hpp"
+#include "rclpy_hermos/types/adapter.hpp"
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 namespace types
 {
@@ -93,5 +93,5 @@ private:
   std::size_t accounted_{0};
 };
 }  // namespace types
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos
 #endif  // TYPES__ROOT_HPP_

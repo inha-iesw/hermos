@@ -30,13 +30,13 @@
 #include <thread>
 #include <utility>
 
-#include "agnocast/agnocast.hpp"
-#include "rclpy_agnocast_msgs/msg/shared_buffer.hpp"
+#include "hermos/hermos.hpp"
+#include "rclpy_hermos_msgs/msg/shared_buffer.hpp"
 
 namespace
 {
 
-using Message = rclpy_agnocast_msgs::msg::SharedBuffer;
+using Message = rclpy_hermos_msgs::msg::SharedBuffer;
 using EventField = std::pair<std::string, std::string>;
 
 std::mutex output_mutex;
@@ -112,7 +112,7 @@ PayloadValidation validate_payload(const Message & message)
 class ExecutorWorker
 {
 public:
-  explicit ExecutorWorker(agnocast::AgnocastOnlySingleThreadedExecutor & executor)
+  explicit ExecutorWorker(hermos::HermosOnlySingleThreadedExecutor & executor)
   : executor_(executor), failure_(), worker_([this]() {
         try {
           executor_.spin();
@@ -154,7 +154,7 @@ private:
     }
   }
 
-  agnocast::AgnocastOnlySingleThreadedExecutor & executor_;
+  hermos::HermosOnlySingleThreadedExecutor & executor_;
   std::exception_ptr failure_;
   std::thread worker_;
 };
@@ -165,10 +165,10 @@ int run_subscriber(const std::string & topic, const std::size_t depth)
   options.start_parameter_services(false);
   options.start_parameter_event_publisher(false);
   options.use_clock_thread(false);
-  auto node = std::make_shared<agnocast::Node>(
-    "rclpy_agnocast_system_subscriber_" + std::to_string(getpid()), options);
+  auto node = std::make_shared<hermos::Node>(
+    "rclpy_hermos_system_subscriber_" + std::to_string(getpid()), options);
 
-  auto callback = [](const agnocast::ipc_shared_ptr<const Message> & message) {
+  auto callback = [](const hermos::ipc_shared_ptr<const Message> & message) {
       const auto validation = validate_payload(*message);
       emit_event(
         "RX",
@@ -183,7 +183,7 @@ int run_subscriber(const std::string & topic, const std::size_t depth)
           {"entry_id", std::to_string(message.get_entry_id())}});
     };
   auto subscription = node->create_subscription<Message>(topic, depth, std::move(callback));
-  agnocast::AgnocastOnlySingleThreadedExecutor executor;
+  hermos::HermosOnlySingleThreadedExecutor executor;
   executor.add_node(node);
   ExecutorWorker worker(executor);
 
@@ -242,14 +242,14 @@ int main(int argc, char ** argv)
 
   bool initialized = false;
   try {
-    agnocast::init(0, nullptr);
+    hermos::init(0, nullptr);
     initialized = true;
     const int status = run_subscriber(argv[1], depth);
-    agnocast::shutdown();
+    hermos::shutdown();
     return status;
   } catch (const std::exception & error) {
     if (initialized) {
-      agnocast::shutdown();
+      hermos::shutdown();
     }
     std::cerr << "shared_buffer_subscriber: " << error.what() << '\n';
     return 1;

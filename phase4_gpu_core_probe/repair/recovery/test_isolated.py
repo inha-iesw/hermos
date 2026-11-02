@@ -312,8 +312,8 @@ def test_wrapper_loss_with_eof_close_error_still_confirms_worker_death(monkeypat
 
 
 @pytest.mark.parametrize('override', [
-    {}, {'AGNOCAST_BRIDGE_MODE': 'on', 'AGNOCAST_NO_DISCOVERY_AGENT': '1'},
-    {'AGNOCAST_BRIDGE_MODE': 'off', 'AGNOCAST_NO_DISCOVERY_AGENT': '0'},
+    {}, {'HERMOS_BRIDGE_MODE': 'on', 'HERMOS_NO_DISCOVERY_AGENT': '1'},
+    {'HERMOS_BRIDGE_MODE': 'off', 'HERMOS_NO_DISCOVERY_AGENT': '0'},
 ])
 def test_unsupported_peer_environment_is_rejected_before_stage_creation(monkeypatch, tmp_path, override):
     monkeypatch.setattr(os, 'getuid', lambda: 1000)

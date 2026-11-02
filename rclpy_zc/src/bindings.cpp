@@ -1,7 +1,7 @@
-#include "rclpy_agnocast/bindings.hpp"
+#include "rclpy_hermos/bindings.hpp"
 
-#include "rclpy_agnocast/buffer_owner.hpp"
-#include "rclpy_agnocast/runtime.hpp"
+#include "rclpy_hermos/buffer_owner.hpp"
+#include "rclpy_hermos/runtime.hpp"
 #include "subscriber/native.hpp"
 
 #include <pybind11/pybind11.h>
@@ -13,7 +13,7 @@
 
 namespace py = pybind11;
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 void bind_subscriber(py::module_ & module);
 #ifdef BUILD_TESTING
@@ -123,25 +123,25 @@ void bind_runtime(py::module_ & module)
 }
 
 }  // namespace
-}  // namespace rclpy_agnocast
+}  // namespace rclpy_hermos
 
-namespace rclpy_agnocast
+namespace rclpy_hermos
 {
 void bind_types(py::module_ & module);
 }
 
 PYBIND11_MODULE(_native, module)
 {
-  module.doc() = "Typed Agnocast CPU zero-copy native adapter";
-  rclpy_agnocast::bind_types(module);
-  if (rclpy_agnocast::register_writable_buffer_export_type(module.ptr()) != 0) {
+  module.doc() = "Typed Hermos CPU zero-copy native adapter";
+  rclpy_hermos::bind_types(module);
+  if (rclpy_hermos::register_writable_buffer_export_type(module.ptr()) != 0) {
     throw py::error_already_set();
   }
-  rclpy_agnocast::bind_publisher(module);
-  rclpy_agnocast::bind_subscriber(module);
-  rclpy_agnocast::bind_runtime(module);
+  rclpy_hermos::bind_publisher(module);
+  rclpy_hermos::bind_subscriber(module);
+  rclpy_hermos::bind_runtime(module);
 #ifdef BUILD_TESTING
-  rclpy_agnocast::bind_observation(module);
-  rclpy_agnocast::tensor::bind_testing(module);
+  rclpy_hermos::bind_observation(module);
+  rclpy_hermos::tensor::bind_testing(module);
 #endif
 }

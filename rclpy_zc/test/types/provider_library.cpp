@@ -6,19 +6,19 @@
 #include <stdexcept>
 #include <string>
 
-#include "rclpy_agnocast/types/adapter.hpp"
-#include "rclpy_agnocast/types/field_ops.hpp"
+#include "rclpy_hermos/types/adapter.hpp"
+#include "rclpy_hermos/types/field_ops.hpp"
 
 namespace
 {
-using rclpy_agnocast::types::ADAPTER_ABI_VERSION;
-using rclpy_agnocast::types::compiled_abi_tag;
-using rclpy_agnocast::types::message_ops;
-using rclpy_agnocast::types::NativeEndpoint;
-using rclpy_agnocast::types::ProviderDescriptor;
-using rclpy_agnocast::types::Status;
-using rclpy_agnocast::types::status_from_exception;
-using rclpy_agnocast::types::TypeOps;
+using rclpy_hermos::types::ADAPTER_ABI_VERSION;
+using rclpy_hermos::types::compiled_abi_tag;
+using rclpy_hermos::types::message_ops;
+using rclpy_hermos::types::NativeEndpoint;
+using rclpy_hermos::types::ProviderDescriptor;
+using rclpy_hermos::types::Status;
+using rclpy_hermos::types::status_from_exception;
+using rclpy_hermos::types::TypeOps;
 
 Status fail_creation(void *, const char *, std::size_t, NativeEndpoint * endpoint) noexcept
 {
@@ -32,9 +32,9 @@ Status fail_creation(void *, const char *, std::size_t, NativeEndpoint * endpoin
 
 Status unused_subscription(
   void *, const char *, std::size_t, void *, void *,
-  rclpy_agnocast::types::NativeReceive,
-  rclpy_agnocast::types::NativeSubscriptionEndpoint *) noexcept
-{return {rclpy_agnocast::types::ErrorCode::kUnsupported, "fixture has no subscription"};}
+  rclpy_hermos::types::NativeReceive,
+  rclpy_hermos::types::NativeSubscriptionEndpoint *) noexcept
+{return {rclpy_hermos::types::ErrorCode::kUnsupported, "fixture has no subscription"};}
 
 const auto root = message_ops<std::int64_t>(nullptr, 0);
 const TypeOps operations{&root, fail_creation, unused_subscription};
@@ -51,7 +51,7 @@ const ProviderDescriptor provider{
  * @return Borrowed descriptor valid only while this library is loaded or process-pinned.
  */
 extern "C" __attribute__((visibility("default")))
-const rclpy_agnocast::types::ProviderDescriptor * test_provider_descriptor()
+const rclpy_hermos::types::ProviderDescriptor * test_provider_descriptor()
 {
   return &provider;
 }
