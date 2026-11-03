@@ -1,0 +1,3 @@
+[submodule "hermos"]
+	path = hermos
+	url = https://github.com/inha-iesw/hermos-infrastructure.git
