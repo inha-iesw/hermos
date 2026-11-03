@@ -68,8 +68,10 @@ before publishing. `as_tensor()` exports once. Context exit/cancel defers reclam
 until all aliases and bound-stream work finish. Successful core preparation commits
 the publication: a subsequent descriptor allocation/fill/publish error cannot
 cancel that GPU generation or make it immediately reusable. The CPU descriptor is
-borrowed only after preparation and is resized, filled and published on the native
-typed worker.
+borrowed only after preparation. Structural resizes, publication and native
+lifetime operations stay on the typed worker; allocated scalar fields and scoped
+metadata byte views are filled on the caller thread. Every view is released
+before publication.
 
 ### Consumer
 

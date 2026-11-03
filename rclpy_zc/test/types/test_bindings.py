@@ -135,7 +135,9 @@ def test_strings_decode_explicitly_without_freezing_and_export_code_units(endpoi
         message.wide.resize(1)
         with message.text.buffer() as view:
             assert view.format == 'B'
+            assert message._owner.snapshot['exports'] == 1
             view[:] = 'é'.encode()
+        assert message._owner.snapshot['exports'] == 0
         with message.wide.buffer() as view:
             assert view.format == 'H' and view.itemsize == 2
             view[0] = ord('한')
@@ -143,6 +145,54 @@ def test_strings_decode_explicitly_without_freezing_and_export_code_units(endpoi
         assert message.wide.to_text() == '한'
         assert handle.inspect()['text_bytes'] == 'é'.encode()
         assert handle.inspect()['wide_units'] == [ord('한')]
+
+
+def test_string_bulk_assignment_error_releases_native_export(endpoints):
+    publisher, handle = endpoints()
+    with publisher.borrow_message() as message:
+        owner = message._owner
+        message.text.resize(3)
+        path = (owner.info((), 0)['members'].index('text'),)
+        with pytest.raises(ValueError):
+            with owner.buffer(path, owner.snapshot['generation']) as view:
+                view[:] = b'wrong-length'
+        assert owner.snapshot['exports'] == 0
+        assert handle.inspect()['text_bytes'] == b'\0\0\0'
+
+
+def test_direct_scalar_write_rejects_stale_generation_without_mutation(endpoints):
+    publisher, handle = endpoints()
+    with publisher.borrow_message() as message:
+        owner = message._owner
+        path = (owner.info((), 0)['members'].index('signed'),)
+        stale_generation = owner.snapshot['generation']
+        message.values.resize(2)
+        with pytest.raises(RuntimeError, match='stale structural generation'):
+            owner.write(path, stale_generation, 99)
+        assert handle.inspect()['signed'] == 0
+        owner.write(path, owner.snapshot['generation'], 42)
+        assert handle.inspect()['signed'] == 42
+
+
+def test_direct_scalar_write_rejects_foreign_thread_without_mutation(endpoints):
+    publisher, handle = endpoints()
+    with publisher.borrow_message() as message:
+        owner = message._owner
+        path = (owner.info((), 0)['members'].index('signed'),)
+        errors = []
+
+        def write_foreign():
+            try:
+                owner.write(path, 0, 99)
+            except RuntimeError as error:
+                errors.append(str(error))
+
+        thread = threading.Thread(target=write_foreign)
+        thread.start()
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+        assert len(errors) == 1 and 'creator thread' in errors[0]
+        assert handle.inspect()['signed'] == 0
 
 
 def test_derived_view_pins_root_until_release_on_foreign_thread(endpoints):

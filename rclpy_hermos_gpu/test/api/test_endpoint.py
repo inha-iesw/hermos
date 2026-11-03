@@ -1,6 +1,7 @@
 """Tensor publication, deferred mapping and descriptor ownership contracts."""
 
 from types import SimpleNamespace
+from contextlib import contextmanager
 
 import pytest
 
@@ -42,6 +43,48 @@ def test_live_writable_alias_rejection_keeps_loan_retryable(registered_runtime):
         publisher.publish(loan)
     assert not loan._terminal
     loan.cancel()
+
+
+@pytest.mark.parametrize('failure', ['fill', 'publish'])
+def test_prepared_generation_survives_descriptor_fill_or_publish_failure(
+        registered_runtime, monkeypatch, failure):
+    from rclpy_hermos_gpu.endpoint import publisher as publisher_module
+
+    events = []
+
+    @contextmanager
+    def borrow():
+        events.append('metadata-borrow')
+        try:
+            yield object()
+        finally:
+            events.append('metadata-cleanup')
+
+    def fill(message, descriptor):
+        events.append('fill')
+        if failure == 'fill':
+            raise RuntimeError('metadata fill failed')
+
+    def publish(message):
+        events.append('publish')
+        raise RuntimeError('metadata publish failed')
+
+    monkeypatch.setattr(publisher_module, 'fill_descriptor', fill)
+    publisher = TensorPublisher(SimpleNamespace(id=1),
+                                SimpleNamespace(_lifecycle_lock=registered_runtime._lock,
+                                                _gpu_publishers=set()),
+                                gpu_runtime=registered_runtime)
+    publisher._typed = SimpleNamespace(borrow_message=borrow, publish=publish)
+    native = SimpleNamespace(prepare=lambda: events.append('prepare') or {},
+                             cancel=lambda: events.append('cancel'))
+    with TensorLoan(publisher, native, None) as loan:
+        with pytest.raises(RuntimeError, match=f'metadata {failure} failed'):
+            publisher.publish(loan)
+        assert loan._terminal
+        with pytest.raises(RuntimeError, match='terminal'):
+            publisher.publish(loan)
+    assert events == ['prepare', 'metadata-borrow', 'fill'] + (
+        ['publish'] if failure == 'publish' else []) + ['metadata-cleanup']
 
 
 def test_endpoint_close_preserves_shared_mapper_until_runtime_shutdown(registered_runtime):
