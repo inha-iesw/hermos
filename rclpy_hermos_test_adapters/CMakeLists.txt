@@ -15,6 +15,10 @@ rclpy_hermos_generate_adapters(_types TYPES
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_installed_provider test/test_installed_provider.py TIMEOUT 60)
+  ament_add_pytest_test(test_typed_signal_shutdown test/typed/lifecycle
+    APPEND_ENV
+      "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test/typed:${CMAKE_CURRENT_SOURCE_DIR}/../rclpy_zc/test"
+    TIMEOUT 30)
   find_package(Threads REQUIRED)
   add_executable(rclpy_hermos_typed_inspector test/typed/inspector.cpp)
   target_compile_features(rclpy_hermos_typed_inspector PRIVATE cxx_std_17)

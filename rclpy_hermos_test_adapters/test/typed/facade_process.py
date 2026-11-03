@@ -12,6 +12,18 @@ from process import rejects
 from system_runtime import emit
 
 
+def _is_expected_shutdown(error, context, signal_pending):
+    """Accept Humble's WaitSet creation race only during requested signal shutdown."""
+    from rclpy.executors import ExternalShutdownException
+    from rclpy.impl.implementation_singleton import rclpy_implementation as _rclpy
+
+    if isinstance(error, ExternalShutdownException):
+        return not context.ok()
+    return (signal_pending and not context.ok() and isinstance(error, _rclpy.RCLError)
+            and str(error).startswith(
+                'failed to initialize wait set: the given context is not valid,'))
+
+
 def wait_signal(node):
     """Observe rclpy's installed signal handlers without replacing them in the harness."""
     interrupted = False
@@ -69,7 +81,7 @@ def publish_commands(node, message_type, args, qos):
 def subscribe_commands(node, message_type, args, qos):
     """Retain only a one-byte alias after dispatch and expose retryable teardown."""
     from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-    from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
+    from rclpy.executors import SingleThreadedExecutor
     from rclpy_hermos import SubscriptionLimits
 
     held = []
@@ -80,6 +92,7 @@ def subscribe_commands(node, message_type, args, qos):
     failure_expected = threading.Event()
     resume = threading.Event()
     stopping = threading.Event()
+    signal_pending = threading.Event()
     resume.set()
     alias_value = None
     group = MutuallyExclusiveCallbackGroup()
@@ -134,10 +147,9 @@ def subscribe_commands(node, message_type, args, qos):
                     resume.clear()
                     emit('INJECTED_FAILURE', kind='MemoryError')
                     resume.wait()
-        except ExternalShutdownException:
-            if node.context.ok():
-                raise
         except BaseException as error:
+            if _is_expected_shutdown(error, node.context, signal_pending.is_set()):
+                return
             errors.append(error)
             emit('ERROR', kind=type(error).__name__, detail=str(error))
 
@@ -150,6 +162,7 @@ def subscribe_commands(node, message_type, args, qos):
             if command == 'quit':
                 break
             if command == 'await_signal':
+                signal_pending.set()
                 wait_signal(node)
                 break
             if errors:
