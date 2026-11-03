@@ -53,6 +53,7 @@ bash experiments/g5/gpu_latency/run.sh "$PWD/log/g5/gpu-new"
 bash experiments/g5/gpu_latency/verify.sh
 bash experiments/g5/gpu_latency/run.sh "$PWD/log/g5/gpu-compare-smoke-new" --smoke --compare-dds
 bash experiments/g5/gpu_latency/run.sh "$PWD/log/g5/gpu-compare-new" --compare-dds
+bash experiments/g5/gpu_latency/run.sh "$PWD/log/g5/gpu-repeat-new" --compare-dds --repeats 3
 ```
 
 Use fresh stage paths and run sequentially with other device/DDS workloads.
@@ -98,7 +99,10 @@ Reports retain publish-call time, callback and GPU-done boundaries, and
 fill→GPU-done mean/p99. A callback can precede the publisher's return, so these
 intervals overlap and cannot be added or subtracted to derive pure transit cost.
 Positive comparison percentages mean additional latency: `(HERMOS / DDS - 1)`.
-Prepare, metadata writing and descriptor publish costs inside `publish()` still
-need independent instrumentation before optimization. Legacy upstream examples
+The separate [call-cost diagnostic](costs/README.md) measures prepare, descriptor
+borrow/resize/fill/publish, decode/map and the existing GPU completion wait.
+Those instrumented observations are excluded from headline performance effects.
+The [follow-up evidence](../evaluation/EVIDENCE.md) includes the optimized strict
+three-repeat matrix and its remaining latency limitations. Legacy upstream examples
 use a different core and cannot replace this matched comparison. Real VLN/rosbag,
 Orin, sustained resource/copy observability and GPU bridge remain unassessed.

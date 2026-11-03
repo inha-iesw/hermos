@@ -2,9 +2,24 @@
 
 Updated: 2026-11-03 (Asia/Seoul).
 
-This is an implementation and validation plan, not a performance result.
-The HERMOS package rename is separate from the optimizations below. Neither
-renaming packages nor passing host tests establishes improved device performance.
+This plan records the optimization boundaries and acceptance criteria. Current
+P0 instrumentation and P1/P2 implementation, tests and subsequent device results
+are in [the independent evidence](evaluation/EVIDENCE.md). CPU reclaim policy
+changes and further P3 experiments are deferred at the user's request
+(2026-11-03 KST). Separate prepare/decode/map diagnostics are now recorded in
+the independent evidence; their instrumented timings are excluded from speedup
+acceptance. The HERMOS package
+rename is separate; renaming or passing host tests alone proves no speedup.
+
+The bounded follow-up has now completed: the CPU signal test-peer correction
+passed ten host regressions and 26 device tests; eight GPU cost-diagnostic
+conditions passed; and the uninstrumented 60-condition GPU matrix passed its
+whole-run identity/delivery/cleanup gate with 60,000 measured receipts. The
+12-condition 4K/N8 fanout matrix completed but exited 2 for DDS receipt loss,
+invalidating all six paired latency effects. A separate six-condition 64 KiB/N8,
+5 Hz control passed with complete delivery on both paths. Its HERM0S all-reader
+mean was 15.0–27.3% lower, while p99 was not lower in every repeat. These results
+close the planned bounded follow-up, not full G5, real-VLN or Orin acceptance.
 
 ## Evidence and measurement boundaries
 
@@ -22,12 +37,16 @@ additional mechanism evidence, not an optimized Thor run.
   measurement using the actual generated GpuTensor provider.
 - A single worker operation measured at about 0.024 ms is a lower bound for the
   handoff, not the latency of constructing and publishing a complete descriptor.
-  Approximately 0.3 ms publish latency after optimization is a hypothesis.
+  Approximately 0.3 ms publish latency was the pre-implementation hypothesis;
+  new P1/P2 run means range 0.300–0.393 ms under the qualifications in the
+  independent evidence. It is not a portable latency guarantee.
 - CPU: the fork's synchronous MADV_REMOVE on freed shared-heap ranges is followed
   by faults when those pages are used again. A paced tmpfs control reproduced
-  much of the observed size-dependent cost, but the actual heaphook eager/retain
-  device A/B has not run. The control's 4 MiB fill near 0.15 ms is not a product
-  result or acceptance threshold.
+  much of the observed size-dependent cost. The subsequently supplied external
+  benchmark contains actual eager/no-reclaim device A/B, including full-payload
+  consumption, but its single runs do not satisfy the repeated, long-reuse policy
+  acceptance below. See [the independent review](evaluation/EXTERNAL_REVIEW.md).
+  The control's 4 MiB fill near 0.15 ms is not a product result or acceptance threshold.
 - publish-call, publish-to-callback and publish-to-GPU-done overlap. Do not add
   them. GPU-done includes mapping/import, checksum work and a completion wait.
   CPU fill-to-consumer includes borrow/allocation/fill and the chosen consumer
@@ -89,7 +108,11 @@ allocation thread is not safe. Do not bypass owner checks for a faster result.
 The decode control explained about 70 microseconds of the observed receiver gap,
 not its entirety. Attribute any remaining difference only after device timing.
 
-## P3: CPU heaphook eager/retain A/B
+## P3: CPU heaphook eager/retain A/B — deferred
+
+Excluded from the current work scope at the user's request (2026-11-03 KST).
+The design below is retained for reference; policy implementation, additional
+eager/retain comparisons and reclaim-specific long-run tests are not active tasks.
 
 Keep logical message destruction, reference release and TLSF deallocation in
 both modes. Compare current eager page return against an explicitly selected
@@ -128,12 +151,10 @@ cleanup is part of this optimization.
    GPU generation early.
 4. Reuse Python/Python and Python/C++ device transport, owner drain and teardown
    checks, followed by the matched GPU matrix with fresh result directories.
-5. Run actual heaphook P3 A/B independently of GPU changes, including long-run
-   reuse and memory behavior; choose deployment policy only from those results.
-6. Preserve every old result and publish source/artifact-linked new evidence.
+5. Preserve every old result and publish source/artifact-linked new evidence.
    Real VLN/rosbag, Orin and the research's 10% acceptance requirement remain
    separate outstanding validations.
 
-The implementation boundary is metadata handling, heaphook policy and G5
-observations. Kernel migration, a replacement GPU allocator, message-size policy
+The current implementation boundary is metadata handling and G5 observations.
+CPU reclaim policy work is deferred. Kernel migration, a replacement GPU allocator, message-size policy
 changes and performance implementation during the package rename are out of scope.

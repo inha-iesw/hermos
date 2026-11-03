@@ -13,27 +13,52 @@ import sys
 import time
 
 from .provenance import mapped_objects, require_uninstrumented
+from .observation import cpu_frequency_snapshot, memory_snapshot, thread_snapshot
 
 
 def emit(event, **values):
     print(json.dumps(dict(event=event, **values)), flush=True)
 
 
-def snapshot(*, network=False):
-    """Observe process counters outside the timed publication sequence."""
-    fields = {}
+def usage_snapshot():
+    """Cumulative process counters with their observation timestamp."""
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    return dict(cpu_user_seconds=usage.ru_utime, cpu_system_seconds=usage.ru_stime,
+                voluntary_context_switches=usage.ru_nvcsw,
+                involuntary_context_switches=usage.ru_nivcsw,
+                minor_page_faults=usage.ru_minflt, major_page_faults=usage.ru_majflt,
+                usage_collected_ns=time.monotonic_ns())
+
+
+def snapshot(*, network=False, detailed=True):
+    """Observe outside timed samples, bracketing the collection's own resource cost.
+
+    A window starts at its first snapshot's post-collection counters and ends at
+    its last snapshot's top-level counters. Scheduling disturbance from collecting
+    snapshots is still possible; the collection interval is retained explicitly.
+    Detailed memory/thread/frequency reads belong before/after the run or to
+    explicitly separate diagnostic runs, because they can exceed a sample period.
+    """
+    fields = dict(collection_started_ns=time.monotonic_ns(), detailed=detailed)
+    fields.update(usage_snapshot())
     for line in Path('/proc/self/status').read_text().splitlines():
         key, _, value = line.partition(':')
         if key in ('VmRSS', 'VmHWM', 'VmSize', 'Threads'):
             fields[key] = int(value.split()[0])
     fields['fds'] = len(list(Path('/proc/self/fd').iterdir()))
-    usage = resource.getrusage(resource.RUSAGE_SELF)
-    fields.update(cpu_user_seconds=usage.ru_utime, cpu_system_seconds=usage.ru_stime,
-                  voluntary_context_switches=usage.ru_nvcsw,
-                  involuntary_context_switches=usage.ru_nivcsw)
+    fields.update(memory=None, cpu_frequency=None, threads=None)
+    if detailed:
+        fields['memory'] = memory_snapshot()
+        fields['cpu_frequency'] = cpu_frequency_snapshot()
+        try:
+            fields['threads'] = thread_snapshot()
+        except OSError as error:
+            fields.update(threads=None, threads_error=str(error))
     if network:
         from .observation import owned_udp_sockets
         fields['udp_sockets'] = owned_udp_sockets()
+    fields['post_collection_usage'] = usage_snapshot()
+    fields['collection_finished_ns'] = time.monotonic_ns()
     return fields
 
 
@@ -67,6 +92,32 @@ def register():
 def warmup_snapshot_due(report, sequence, warmup):
     """Allow the next observed sequence to supply a missing warm-up boundary snapshot."""
     return 'resources_after_warmup' not in report and sequence >= max(0, warmup - 1)
+
+
+def observe_sample_boundary(report, sequence, *, warmup, samples, network=False,
+                            resource_diagnostics=False):
+    """Keep measured completion separate from later drain/control-loop work.
+
+    A terminal sequence can arrive before earlier messages. Counts describe the
+    rows present at capture, and late receipts never rewrite that observation.
+    An absent terminal receipt leaves the measurement-end snapshot unavailable.
+    """
+    boundaries = []
+    if warmup_snapshot_due(report, sequence, warmup):
+        boundaries.append(('after_warmup', 'warmup'))
+    if sequence == warmup + samples - 1 and 'resources_measurement_end' not in report:
+        boundaries.append(('measurement_end', 'measurement_end'))
+    for resource_name, boundary in boundaries:
+        report['resources_' + resource_name] = snapshot(
+            network=network, detailed=resource_diagnostics)
+        report[boundary + '_snapshot_sequence'] = sequence
+        report[boundary + '_snapshot_count'] = len(report['samples'])
+        measured = [row[0] for row in report['samples'] if row[0] >= warmup]
+        report[boundary + '_measured_count'] = len(measured)
+        if boundary == 'measurement_end':
+            report['measurement_end_complete'] = (
+                len(measured) == samples and set(measured) == set(range(warmup, warmup + samples)))
+    return [resource_name for resource_name, _ in boundaries]
 
 
 def main():
@@ -107,6 +158,7 @@ def main():
     started = False
     executor = None
     report = dict(case=case, pid=os.getpid(), samples=records,
+                  resource_diagnostics=protocol.get('resource_diagnostics', False),
                   time_namespace=os.readlink('/proc/self/ns/time'))
 
     def stop(signum, frame):
@@ -129,10 +181,10 @@ def main():
             source.release()
         completed = time.monotonic_ns()
         records.append([sequence, entered, completed])
-        if warmup_snapshot_due(report, sequence, protocol['warmup']):
-            report['resources_after_warmup'] = snapshot(
-                network=protocol.get('network_diagnostics', False))
-            report['warmup_snapshot_sequence'] = sequence
+        observe_sample_boundary(report, sequence, warmup=protocol['warmup'],
+                                samples=protocol['samples'],
+                                network=protocol.get('network_diagnostics', False),
+                                resource_diagnostics=protocol.get('resource_diagnostics', False))
 
     try:
         if args.role == 'publisher':
@@ -206,10 +258,10 @@ def main():
                             endpoint.publish(message)
                             returned = time.monotonic_ns()
                         records.append([sequence, fill_started, published, returned])
-                        if warmup_snapshot_due(report, sequence, protocol['warmup']):
-                            report['resources_after_warmup'] = snapshot(
-                                network=protocol.get('network_diagnostics', False))
-                            report['warmup_snapshot_sequence'] = sequence
+                        observe_sample_boundary(report, sequence, warmup=protocol['warmup'],
+                                                samples=protocol['samples'],
+                                                network=protocol.get('network_diagnostics', False),
+                                                resource_diagnostics=protocol.get('resource_diagnostics', False))
                     emit('SENT', count=len(records))
                 elif command == 'finish' and not finished:
                     report['resources_after'] = snapshot(

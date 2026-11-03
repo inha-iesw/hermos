@@ -50,7 +50,7 @@ for name, expected in sources.items():
             assert record['agnocast_srcversion'] == expected
     else:
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == expected, name
-record['source_identity_files'] = len(sources) - 1
+record['source_identity_files'] = sum(name != 'loaded_agnocast_srcversion' for name in sources)
 module = artifact_root / 'kmod/hermos_rclpy.ko'
 record['kernel'] = os.uname().release
 for key in ('vermagic', 'srcversion'):

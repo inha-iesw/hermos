@@ -11,18 +11,20 @@ import time
 import torch
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 
-from experiments.g5.cpu_latency.peer import emit, snapshot, warmup_snapshot_due
+from experiments.g5.cpu_latency.peer import (
+    emit, observe_sample_boundary, snapshot, warmup_snapshot_due)
 from experiments.g5.cpu_latency.provenance import mapped_objects, require_uninstrumented
 from rclpy_hermos_gpu_msgs.msg import GpuTensor
 
 
-def factory(runtime, arguments):
+def factory(runtime, arguments, *, observer=None):
     """Create one peer; registration, execution and teardown belong to the launcher.
 
     Arguments are role, configuration JSON path and fresh result JSON path.
     Consumer completion ends at a synchronized read-only GPU checksum. Two scalar
     DtoH diagnostics follow that timestamp and are excluded from its duration.
     Their 16 bytes per publication are explicit and are not payload staging.
+    An optional diagnostic observer adds clocks only in separately labeled runs.
     """
     if len(arguments) != 3 or arguments[0] not in ('publisher', 'subscriber'):
         raise ValueError('expected publisher/subscriber, configuration path, output path')
@@ -61,19 +63,24 @@ def factory(runtime, arguments):
     qos = QoSProfile(depth=config['depth'], reliability=ReliabilityPolicy.BEST_EFFORT)
     records = []
     report = dict(config=config, role=role, pid=os.getpid(), samples=records,
+                  resource_diagnostics=config.get('resource_diagnostics', False),
                   time_namespace=os.readlink('/proc/self/ns/time'),
                   diagnostic_dtoh_bytes_per_sample=16 if role == 'subscriber' else 0)
     ready = started = finished = False
     pending = b''
 
-    def warmup_snapshot(sequence):
-        if warmup_snapshot_due(report, sequence, config['warmup']):
+    def sample_boundary(sequence):
+        if (warmup_snapshot_due(report, sequence, config['warmup']) or
+                sequence == total_count - 1):
             runtime.poll()
-            report['resources_after_warmup'] = snapshot()
-            report['runtime_after_warmup'] = runtime.stats
-            report['warmup_snapshot_sequence'] = sequence
+        for boundary in observe_sample_boundary(
+                report, sequence, warmup=config['warmup'], samples=config['samples'],
+                resource_diagnostics=config.get('resource_diagnostics', False)):
+            report['runtime_' + boundary] = runtime.stats
 
     def callback(lease):
+        if observer is not None:
+            observer.begin()
         entered = time.monotonic_ns()
         tensor = lease.as_tensor(stream=stream)
         if tuple(tensor.shape) != (size,) or tensor.dtype != torch.uint8:
@@ -81,7 +88,10 @@ def factory(runtime, arguments):
         with torch.cuda.stream(stream):
             checksum = tensor.sum(dtype=torch.int64)
             completion.record(stream)
-        completion.synchronize()
+        if observer is None:
+            completion.synchronize()
+        else:
+            observer.call('gpu_completion_wait', completion.synchronize)
         gpu_done = time.monotonic_ns()
         # Only these scalar diagnostics copy to the host, after the timed GPU read.
         with torch.cuda.stream(stream):
@@ -96,7 +106,9 @@ def factory(runtime, arguments):
             raise RuntimeError(f'GPU checksum mismatch for sequence {sequence}')
         del header, checksum, tensor
         records.append([sequence, entered, gpu_done])
-        warmup_snapshot(sequence)
+        if observer is not None:
+            observer.end(sequence)
+        sample_boundary(sequence)
 
     if transport == 'dds':
         endpoint = (DDSPublisher(node, config['topic'], qos, runtime) if role == 'publisher' else
@@ -113,6 +125,8 @@ def factory(runtime, arguments):
 
     def publish_one():
         sequence = len(records)
+        if observer is not None:
+            observer.begin()
         fill_started = time.monotonic_ns()
         with endpoint.borrow_tensor((size,), torch.uint8, f'cuda:{runtime.device}', stream) as loan:
             tensor = loan.as_tensor()
@@ -126,7 +140,9 @@ def factory(runtime, arguments):
             endpoint.publish(loan)
             returned = time.monotonic_ns()
         records.append([sequence, fill_started, published, returned])
-        warmup_snapshot(sequence)
+        if observer is not None:
+            observer.end(sequence)
+        sample_boundary(sequence)
         if len(records) == total_count:
             emit('SENT', count=len(records))
 
@@ -163,6 +179,8 @@ def factory(runtime, arguments):
                 runtime.poll()
                 report['resources_after'] = snapshot()
                 report['runtime_after'] = runtime.stats
+                if observer is not None:
+                    observer.save(output_path, config, role)
                 with output_path.open('x') as output:
                     json.dump(report, output, indent=2)
                 finished = True

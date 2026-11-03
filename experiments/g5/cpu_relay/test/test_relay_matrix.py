@@ -60,3 +60,16 @@ def test_relay_transport_order_does_not_change_fixed_paths():
                     period_ns=1000000, depth=4, full_check=True)
     assert {case['path'] for case in cases(protocol)} == {
         'dds-to-dds', 'hermos-to-dds', 'dds-to-hermos'}
+
+
+@pytest.mark.parametrize('diagnostic', [False, True])
+def test_relay_cli_records_explicit_resource_diagnostic_mode(tmp_path, monkeypatch, diagnostic):
+    import sys
+    from experiments.g5.cpu_relay import run
+    monkeypatch.delenv('LD_PRELOAD', raising=False)
+    argv = ['relay-run', '--output', str(tmp_path)]
+    monkeypatch.setattr(sys, 'argv', argv + (['--resource-diagnostics'] if diagnostic else []))
+    captured = []
+    monkeypatch.setattr(run, 'run_matrix', lambda *args, **kwargs: captured.append(args))
+    run.main()
+    assert captured[0][1]['resource_diagnostics'] is diagnostic

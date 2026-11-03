@@ -10,7 +10,7 @@ import signal
 import sys
 import time
 
-from experiments.g5.cpu_latency.peer import emit, register, snapshot, warmup_snapshot_due
+from experiments.g5.cpu_latency.peer import emit, observe_sample_boundary, register, snapshot
 from experiments.g5.cpu_latency.protocol import validate
 from experiments.g5.cpu_latency.provenance import mapped_objects, require_uninstrumented
 
@@ -46,6 +46,7 @@ def main():
     rows = []
     stopped = finished = False
     report = dict(case=case, pid=os.getpid(), samples=rows,
+                  resource_diagnostics=protocol.get('resource_diagnostics', False),
                   time_namespace=os.readlink('/proc/self/ns/time'), explicit_payload_copy=True)
     executor = None
 
@@ -83,9 +84,9 @@ def main():
         finally:
             source.release()
         rows.append([sequence, entered, published, returned])
-        if warmup_snapshot_due(report, sequence, protocol['warmup']):
-            report['resources_after_warmup'] = snapshot()
-            report['warmup_snapshot_sequence'] = sequence
+        observe_sample_boundary(report, sequence, warmup=protocol['warmup'],
+                                samples=protocol['samples'],
+                                resource_diagnostics=protocol.get('resource_diagnostics', False))
 
     try:
         options = (dict(transport='hermos', max_message_bytes=limit)

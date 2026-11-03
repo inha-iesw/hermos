@@ -110,6 +110,9 @@ def report(results, path, protocol=None):
               '- RSS/FD snapshots are observations, not proof of leak freedom.',
               '- Synthetic overhead measurements do not certify '
               'the final research requirement.', '']
+    if protocol and protocol.get('resource_diagnostics', False):
+        lines += ['Resource diagnostics enabled: heavy boundary observations can disturb pacing. '
+                  'These are diagnostic results, not headline latency measurements.', '']
     (path / 'report.md').write_text('\n'.join(lines))
 
 
@@ -117,6 +120,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--smoke', action='store_true')
+    parser.add_argument('--resource-diagnostics', action='store_true',
+                        help='separate diagnostic run with heavy resource reads at sample boundaries')
     args = parser.parse_args()
     if not args.output.is_absolute():
         parser.error('--output must be a fresh absolute path')
@@ -125,7 +130,7 @@ def main():
     protocol = dict(sizes=[1024, 65536, 1048576], layouts=['dynamic'], rmws=list(RMWS),
                     transports=['dds', 'hermos'], samples=16 if args.smoke else 1000,
                     warmup=100, period_ns=20000000, depth=4, full_check=args.smoke,
-                    order_seed=20261101,
+                    order_seed=20261101, resource_diagnostics=args.resource_diagnostics,
                     purpose='relay-functional-smoke' if args.smoke else 'synthetic-relay-latency',
                     requirement_verdict='not-assessed: explicit CPU relay experiment')
     run_matrix(args.output, protocol, cases(protocol), capture=capture,

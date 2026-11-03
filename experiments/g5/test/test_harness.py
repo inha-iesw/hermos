@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from experiments.g5.harness import execute_epoch, peer_environment, run_matrix, verify_teardown
+from experiments.g5 import harness
 
 
 def teardown(peers=2, **changes):
@@ -86,6 +87,8 @@ def test_changed_identity_rejects_an_otherwise_complete_matrix(tmp_path):
                    run_case=lambda *args: {'complete': True}, report=lambda *args: None,
                    shuffle=False)
     assert not (tmp_path / 'matrix' / 'summary.json').exists()
+    assert json.loads((tmp_path / 'matrix' / 'provenance.json').read_text()) == {'revision': 1}
+    assert json.loads((tmp_path / 'matrix' / 'provenance-end.json').read_text()) == {'revision': 2}
 
 
 def test_transport_environment_only_preloads_the_hermos_peer(tmp_path):
@@ -140,3 +143,44 @@ def test_epoch_saves_every_report_before_teardown(tmp_path, monkeypatch, peers):
     execute_epoch([{} for _ in range(peers)], tmp_path,
                   expected=2, period_ns=10000000, startup_timeout=30)
     assert json.loads((tmp_path / 'teardown.json').read_text()) == teardown(peers)
+
+
+@pytest.mark.parametrize('transport_key', ['transport', 'descriptor_transport'])
+def test_three_repeats_keep_adjacent_pairs_and_alternate_transport_order(transport_key):
+    original = [dict(name=f'{size}-{transport}', size=size, rmw='test-rmw',
+                     **{transport_key: transport})
+                for size in (1024, 4096, 65536) for transport in ('dds', 'hermos')]
+    matrix = harness.paired_repeats(original, 3, transport_key=transport_key, order_seed=7)
+    assert len(matrix) == len({case['name'] for case in matrix}) == 18
+    assert all('repeat' not in case for case in original)
+    assert [case['repeat'] for case in matrix] == [1] * 6 + [2] * 6 + [3] * 6
+    for first, second in zip(matrix[::2], matrix[1::2]):
+        assert (first['size'], first['rmw'], first['repeat']) == (
+            second['size'], second['rmw'], second['repeat'])
+        expected = ['dds', 'hermos'] if first['repeat'] % 2 else ['hermos', 'dds']
+        assert [first[transport_key], second[transport_key]] == expected
+    assert matrix == harness.paired_repeats(
+        original, 3, transport_key=transport_key, order_seed=7)
+    assert matrix != harness.paired_repeats(
+        original, 3, transport_key=transport_key, order_seed=17)
+
+
+def test_single_repeat_preserves_existing_noncomparison_case_names_and_order():
+    matrix = [dict(name=str(size), size=size, rmw='test-rmw', descriptor_transport='hermos')
+              for size in (1024, 4096)]
+    assert harness.paired_repeats(matrix, 1, transport_key='descriptor_transport',
+                                  order_seed=7) == matrix
+
+
+@pytest.mark.parametrize('repeats', [0, -1, True, 1.5, '3'])
+def test_invalid_repeat_count_fails_before_running_or_creating_outputs(repeats):
+    with pytest.raises(ValueError, match='repeats'):
+        harness.paired_repeats([], repeats, transport_key='transport', order_seed=7)
+
+
+@pytest.mark.parametrize('transports', [('dds',), ('hermos',), ('dds', 'dds', 'hermos')])
+def test_repeated_comparison_rejects_missing_or_duplicate_pair_member(transports):
+    matrix = [dict(name=f'case-{i}', size=1024, rmw='test-rmw', transport=transport)
+              for i, transport in enumerate(transports)]
+    with pytest.raises(ValueError, match='pair'):
+        harness.paired_repeats(matrix, 3, transport_key='transport', order_seed=7)

@@ -24,7 +24,13 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_g5_harness ../test
     APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/../../.."
     TIMEOUT 60)
+  ament_add_pytest_test(test_g5_evaluation ../evaluation/test
+    APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/../../.."
+    TIMEOUT 60)
   ament_add_pytest_test(test_gpu_matrix ../gpu_latency/test/test_gpu_matrix.py
+    APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/../../.."
+    TIMEOUT 60)
+  ament_add_pytest_test(test_gpu_fanout ../gpu_fanout/test
     APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/../../.."
     TIMEOUT 60)
 endif()

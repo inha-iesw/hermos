@@ -94,8 +94,9 @@ def test_make_config_rejects_unsupported_case(protocol, key, value):
 
 
 @pytest.mark.parametrize('transport', ['dds', 'hermos'])
+@pytest.mark.parametrize('peer_factory', [None, 'experiments.g5.gpu_latency.costs.peer:factory'])
 def test_runtime_arguments_use_protocol_budgets_without_starting_a_device_epoch(
-        protocol, tmp_path, monkeypatch, transport):
+        protocol, tmp_path, monkeypatch, transport, peer_factory):
     protocol.update(blocks=7, max_reads=3, samples=9, warmup=2, period_ns=11000000)
     config = run_module.make_config(
         dict(size=65536, rmw='rmw_fastrtps_cpp', descriptor_transport=transport), protocol)
@@ -111,7 +112,8 @@ def test_runtime_arguments_use_protocol_budgets_without_starting_a_device_epoch(
     monkeypatch.setattr(run_module, 'execute_epoch', stop)
     path = tmp_path / 'case'
     with pytest.raises(StopBeforeEpoch):
-        run_module.run_pair(config, path)
+        options = {} if peer_factory is None else {'peer_factory': peer_factory}
+        run_module.run_pair(config, path, **options)
     commands, actual_path, options = captured[0]
     assert len(commands) == 2 and actual_path == path
     for command, expected_blocks in zip(commands, ('7', '0')):
@@ -120,6 +122,7 @@ def test_runtime_arguments_use_protocol_budgets_without_starting_a_device_epoch(
         assert argv[argv.index('--max-reads') + 1] == '3'
         assert argv[argv.index('--block-bytes') + 1] == '65536'
         assert argv[argv.index('--max-message-bytes') + 1] == '65536'
+        assert (peer_factory or 'experiments.g5.gpu_latency.peer:factory') in argv
         assert command['env']['RMW_IMPLEMENTATION'] == 'rmw_fastrtps_cpp'
     assert options['expected'] == 11 and options['period_ns'] == 11000000
     assert json.loads((path / 'config.json').read_text()) == config
@@ -162,3 +165,72 @@ def test_report_does_not_claim_gain_without_a_usable_baseline(tmp_path, baseline
     report([baseline, _report_result('hermos')], tmp_path)
     text = (tmp_path / 'report.md').read_text()
     assert '1024 bytes, rmw_cyclonedds_cpp: INVALID (unavailable or zero baseline)' in text
+
+
+def test_gpu_config_preserves_repeat_identity_and_unique_name(protocol):
+    protocol['resource_diagnostics'] = True
+    case = dict(cases(True)[0], repeat=3, name='paired-repeat-03')
+    config = run_module.make_config(case, protocol)
+    assert config['repeat'] == 3 and config['name'] == 'paired-repeat-03'
+    assert config['resource_diagnostics'] is True
+
+
+def test_gpu_report_never_matches_a_baseline_from_another_repeat(tmp_path):
+    baseline = _report_result('dds', done_mean=20000)
+    proposed = _report_result('hermos', done_mean=10000)
+    baseline['case']['repeat'] = 1
+    proposed['case']['repeat'] = 2
+    report([baseline, proposed], tmp_path)
+    text = (tmp_path / 'report.md').read_text()
+    assert '-50.00%' not in text
+    assert '| Repeat |' in text
+
+
+def test_gpu_report_keeps_each_repeat_comparison_instead_of_pooling(tmp_path):
+    results = []
+    for repeat, baseline_mean, proposed_mean in ((1, 20000, 10000), (2, 10000, 30000)):
+        for transport, mean in (('dds', baseline_mean), ('hermos', proposed_mean)):
+            result = _report_result(transport, done_mean=mean)
+            result['case']['repeat'] = repeat
+            results.append(result)
+    report(results, tmp_path)
+    text = (tmp_path / 'report.md').read_text()
+    assert 'repeat 1: -50.00%' in text
+    assert 'repeat 2: +200.00%' in text
+
+
+@pytest.mark.parametrize('diagnostic', [False, True])
+def test_gpu_cli_preserves_pair_order_and_repeat_identity_through_config(tmp_path, monkeypatch, diagnostic):
+    import sys
+    monkeypatch.delenv('LD_PRELOAD', raising=False)
+    argv = ['gpu-run', '--output', str(tmp_path), '--compare-dds', '--repeats', '3']
+    monkeypatch.setattr(sys, 'argv', argv + (['--resource-diagnostics'] if diagnostic else []))
+    captured = []
+    monkeypatch.setattr(run_module, 'run_matrix',
+                        lambda *args, **kwargs: captured.append((args, kwargs)))
+    run_module.main()
+    (output, settings, matrix), options = captured[0]
+    assert output == tmp_path and settings['repeats'] == 3
+    assert settings['resource_diagnostics'] is diagnostic
+    assert all(case['resource_diagnostics'] is diagnostic for case in matrix)
+    assert settings['case_order'] == 'repeat-major-seeded-pair-groups'
+    assert settings['pair_transport_order'] == 'dds-first-odd-hermos-first-even'
+    assert options['shuffle'] is False
+    assert len(matrix) == len({case['name'] for case in matrix}) == 60
+    assert {case['repeat'] for case in matrix} == {1, 2, 3}
+
+
+@pytest.mark.parametrize('value', ['0', '-1', 'bad'])
+def test_gpu_cli_rejects_invalid_repeat_count(tmp_path, monkeypatch, value):
+    import sys
+    monkeypatch.setattr(sys, 'argv', ['gpu-run', '--output', str(tmp_path), '--repeats', value])
+    with pytest.raises(SystemExit) as error:
+        run_module.main()
+    assert error.value.code == 2
+
+
+@pytest.mark.parametrize('value', ['yes', 1])
+def test_gpu_config_requires_explicit_boolean_resource_diagnostic_mode(protocol, value):
+    protocol['resource_diagnostics'] = value
+    with pytest.raises(ValueError, match='resource_diagnostics'):
+        run_module.make_config(cases(False)[0], protocol)

@@ -12,7 +12,7 @@ from experiments.g5.cpu_latency.protocol import RMWS
 from experiments.g5.cpu_latency.provenance import (
     ROOT, PREFIX, archive_sources, capture, digest, hash_artifacts, hash_sources,
     require_release, verify_peer)
-from experiments.g5.harness import execute_epoch, peer_environment, run_matrix
+from experiments.g5.harness import execute_epoch, paired_repeats, peer_environment, run_matrix
 
 
 SIZES = (1024, 4096, 65536, 1048576, 4194304)
@@ -70,6 +70,8 @@ def make_config(case, protocol):
             raise ValueError(f'invalid {key}')
     if protocol.get('dtype') != 'uint8':
         raise ValueError('invalid dtype')
+    if type(protocol.get('resource_diagnostics', False)) is not bool:
+        raise ValueError('invalid resource_diagnostics')
     if protocol['retained_bytes_per_read'] < protocol['descriptor_bytes']:
         raise ValueError('retained_bytes_per_read must cover descriptor_bytes')
     if (type(case.get('size')) is not int or case['size'] not in SIZES or
@@ -77,11 +79,12 @@ def make_config(case, protocol):
             case.get('descriptor_transport') not in ('dds', 'hermos')):
         raise ValueError('invalid GPU case')
     return dict(case, **{key: protocol[key] for key in keys}, dtype=protocol['dtype'],
+                resource_diagnostics=protocol.get('resource_diagnostics', False),
                 max_retained_bytes=protocol['max_reads'] * protocol['retained_bytes_per_read'],
                 topic=f'/g5/p{os.getpid()}/gpu')
 
 
-def run_pair(config, path):
+def run_pair(config, path, *, peer_factory='experiments.g5.gpu_latency.peer:factory'):
     path.mkdir()
     config_path = path / 'config.json'
     config_path.write_text(json.dumps(config, indent=2) + '\n')
@@ -94,7 +97,7 @@ def run_pair(config, path):
                 '--blocks', str(config['blocks']) if role == 'publisher' else '0',
                 '--block-bytes', str(config['size']), '--max-reads', str(config['max_reads']),
                 '--max-message-bytes', str(config['size']),
-                'experiments.g5.gpu_latency.peer:factory', role, str(config_path),
+                peer_factory, role, str(config_path),
                 str(path / f'{role}.json')]
         commands.append(dict(argv=argv, env=environment))
     execute_epoch(commands, path, expected=config['warmup'] + config['samples'],
@@ -124,29 +127,33 @@ def run_pair(config, path):
 
 
 def report(results, output, protocol=None):
+    repeated = any('repeat' in result['case'] for result in results)
+    repeat_heading = 'Repeat | ' if repeated else ''
+    repeat_rule = '---:|' if repeated else ''
     metrics = [('publish_to_callback_ns', 'mean'), ('publish_to_gpu_done_ns', 'mean'),
                ('publish_to_gpu_done_ns', 'p99'), ('publish_call_ns', 'mean'),
                ('fill_to_gpu_done_ns', 'mean'), ('fill_to_gpu_done_ns', 'p99')]
     lines = ['# Same-core GPU descriptor comparison', '',
-             '| Bytes | RMW | Descriptor | Received/expected | Mean callback µs | '
+             f'| {repeat_heading}Bytes | RMW | Descriptor | Received/expected | Mean callback µs | '
              'Mean GPU-done µs | p99 GPU-done µs | Mean publish-call µs | '
              'Mean fill-to-GPU-done µs | p99 fill-to-GPU-done µs | Complete |',
-             '|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|']
+             f'|{repeat_rule}---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|']
     for result in results:
         case = result['case']
         values = [f"{result[metric][stat]/1000:.2f}" if result[metric] else 'N/A'
                   for metric, stat in metrics]
-        lines.append(f"| {case['size']} | {case['rmw']} | {case['descriptor_transport']} | "
+        repeat_label = f"{case.get('repeat', '-')} | " if repeated else ''
+        lines.append(f"| {repeat_label}{case['size']} | {case['rmw']} | {case['descriptor_transport']} | "
                      f"{result['received']}/{result['expected']} | " + ' | '.join(values) +
                      f" | {result['complete']} |")
     lines += ['', '## Matched mean publish-to-GPU-done change', '',
               'Positive percentages mean additional latency: (proposed / DDS - 1) × 100. '
               'Incomplete pairs are invalid.', '']
-    controls = {(r['case']['size'], r['case']['rmw']): r for r in results
+    controls = {(r['case']['size'], r['case']['rmw'], r['case'].get('repeat')): r for r in results
                 if r['case']['descriptor_transport'] == 'dds'}
     for result in results:
         case = result['case']
-        baseline = controls.get((case['size'], case['rmw']))
+        baseline = controls.get((case['size'], case['rmw'], case.get('repeat')))
         # Historical evidence keeps its original transport identity.
         if case['descriptor_transport'] not in ('hermos', 'herm0s', 'agnocast') or baseline is None:
             continue
@@ -157,7 +164,8 @@ def report(results, output, protocol=None):
             change = 'INVALID (unavailable or zero baseline)'
         else:
             change = f"{(current['mean'] / reference['mean'] - 1) * 100:+.2f}%"
-        lines.append(f"- {case['size']} bytes, {case['rmw']}: {change}")
+        repeat_label = f", repeat {case['repeat']}" if 'repeat' in case else ''
+        lines.append(f"- {case['size']} bytes, {case['rmw']}{repeat_label}: {change}")
     lines += ['', 'Same CUDA core, pool, DLPack owners, Torch fill/checksum and stream protocol.',
               'The comparison includes descriptor API, serialization and heap integration costs; '
               'it is not a transport-only or host-staging comparison.',
@@ -165,6 +173,9 @@ def report(results, output, protocol=None):
               'publish-to-GPU-done intervals and must not be added to them.',
               'Sixteen diagnostic DtoH bytes follow each timed GPU completion. '
               'No real VLN/rosbag or 10% acceptance verdict is established.', '']
+    if protocol and protocol.get('resource_diagnostics', False):
+        lines += ['Resource diagnostics enabled: heavy boundary observations can disturb pacing. '
+                  'These are diagnostic results, not headline latency measurements.', '']
     (output / 'report.md').write_text('\n'.join(lines))
 
 
@@ -176,22 +187,36 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--smoke', action='store_true')
+    parser.add_argument('--resource-diagnostics', action='store_true',
+                        help='separate diagnostic run with heavy resource reads at sample boundaries')
+    parser.add_argument('--repeats', type=int, default=1,
+                        help='positive matched repeats; >1 alternates adjacent DDS/Hermos pairs')
     parser.add_argument('--compare-dds', action='store_true',
                         help='matched same-core DDS/Hermos descriptor matrix across both RMWs')
     args = parser.parse_args()
+    if args.repeats < 1:
+        parser.error('--repeats must be a positive integer')
+    if args.repeats > 1 and not args.compare_dds:
+        parser.error('--repeats >1 requires --compare-dds')
     if not args.output.is_absolute() or os.environ.get('LD_PRELOAD'):
         parser.error('fresh absolute output and non-preloaded supervisor required')
     protocol = dict(sizes=list(SIZES), dtype='uint8', blocks=16, max_reads=16,
                     depth=16, descriptor_bytes=4096, retained_bytes_per_read=4096,
                     warmup=64, samples=16 if args.smoke else 1000, period_ns=20000000,
                     diagnostic_dtoh_bytes_per_sample=16,
-                    compare_dds=args.compare_dds, order_seed=20261101,
+                    compare_dds=args.compare_dds, order_seed=20261101, repeats=args.repeats,
+                    resource_diagnostics=args.resource_diagnostics,
                     requirement_verdict='not-assessed: synthetic, no real VLN')
     protocol['case_order'] = 'seeded-shuffle' if args.compare_dds else 'ascending-size'
-    matrix = [make_config(case, protocol) for case in cases(args.compare_dds, protocol['sizes'])]
+    matrix = paired_repeats(cases(args.compare_dds, protocol['sizes']), args.repeats,
+                            transport_key='descriptor_transport', order_seed=protocol['order_seed'])
+    matrix = [make_config(case, protocol) for case in matrix]
+    if args.repeats > 1:
+        protocol.update(case_order='repeat-major-seeded-pair-groups',
+                        pair_transport_order='dds-first-odd-hermos-first-even')
     run_matrix(args.output, protocol, matrix, capture=identity,
                archive_sources=archive_sources, run_case=run_case, report=report,
-               shuffle=args.compare_dds)
+               shuffle=args.compare_dds and args.repeats == 1)
 
 
 if __name__ == '__main__':

@@ -112,6 +112,42 @@ def execute_epoch(commands, path, *, expected, period_ns, startup_timeout):
     verify_teardown(evidence, peers)
 
 
+def paired_repeats(matrix, repeats, *, transport_key, order_seed):
+    """Repeat matched G5 pairs with adjacent, alternating descriptor/CPU transports.
+
+    Repeat IDs are one-based. Odd repeats run DDS then Hermos, even repeats the
+    reverse. Only pair groups are shuffled, separately within each repeat. The
+    default single run preserves its existing names and external shuffle policy.
+    """
+    if type(repeats) is not int or repeats < 1:
+        raise ValueError('repeats must be a positive integer')
+    matrix = list(matrix)
+    if repeats == 1:
+        return matrix
+    groups = {}
+    for case in matrix:
+        key = (case.get('layout'), case['size'], case['rmw'])
+        group = groups.setdefault(key, {})
+        transport = case[transport_key]
+        if transport not in ('dds', 'hermos') or transport in group:
+            raise ValueError('repeated comparison requires one DDS/Hermos pair per condition')
+        group[transport] = case
+    if any(set(group) != {'dds', 'hermos'} for group in groups.values()):
+        raise ValueError('repeated comparison requires complete DDS/Hermos pairs')
+    randomizer = random.Random(order_seed)
+    result = []
+    for repeat in range(1, repeats + 1):
+        keys = list(groups)
+        randomizer.shuffle(keys)
+        transports = ('dds', 'hermos') if repeat % 2 else ('hermos', 'dds')
+        for key in keys:
+            for transport in transports:
+                case = groups[key][transport]
+                result.append(dict(case, repeat=repeat,
+                                   name=f"{case['name']}-repeat-{repeat:02d}"))
+    return result
+
+
 def run_matrix(output, protocol, matrix, *, capture, archive_sources, run_case, report,
                shuffle=True):
     """Freeze inputs before execution; continue on loss, fail immediately on invalid evidence.
@@ -142,7 +178,9 @@ def run_matrix(output, protocol, matrix, *, capture, archive_sources, run_case, 
                      if 'missing_relay_records' in result else '')
             print(f"LOSS: {delivery['lost']} measured messages{relay}; comparison invalid",
                   flush=True)
-    if capture() != identity:
+    final_identity = capture()
+    (output / 'provenance-end.json').write_text(json.dumps(final_identity, indent=2) + '\n')
+    if final_identity != identity:
         raise RuntimeError('source or production artifacts changed during measurement')
     complete = all(result['complete'] for result in results)
     (output / 'summary.json').write_text(json.dumps(

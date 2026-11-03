@@ -24,6 +24,8 @@ def validate(value):
             raise ValueError(f'invalid {key}')
     if type(value.get('full_check')) is not bool:
         raise ValueError('invalid full_check')
+    if type(value.get('resource_diagnostics', False)) is not bool:
+        raise ValueError('invalid resource_diagnostics')
 
 
 def cases(protocol):

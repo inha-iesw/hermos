@@ -40,9 +40,13 @@ GPU는 같은 supervisor에 등록된 별도 프로세스 구성이 기준이며
 
 ## 성능과 검증
 
-[CPU](experiments/g5/cpu_latency/README.md)·[GPU](experiments/g5/gpu_latency/README.md)
+[CPU](experiments/g5/cpu_latency/README.md)·[GPU](experiments/g5/gpu_latency/README.md)·
+[다중 구독자 GPU](experiments/g5/gpu_fanout/README.md)
 측정 시나리오, [측정 결과와 한계](experiments/g5/EVIDENCE.md),
 [성능 개선 계획](experiments/g5/PERFORMANCE_PLAN.md)을 제공합니다.
+[최적화 실측과 독립 재평가](experiments/g5/evaluation/EVIDENCE.md),
+[최신 HTML 벤치마크 검토](experiments/g5/evaluation/EXTERNAL_REVIEW.md)에는
+반복별 성능, 전달 손실, 메모리 해석과 검증 한계를 정리했습니다.
 zero-copy 지원만으로 DDS보다 빠르다고 단정할 수는 없으며, 결과는 실행 조건과 함께 해석해야 합니다.
 
 ## 라이선스와 외부 코드 사용
