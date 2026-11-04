@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>hermos_runtime</name>
+  <version>0.1.0</version>
+  <description>Installation validation and CPU process bootstrap for HERM0S.</description>
+  <maintainer email="maintainers@example.com">rclpy zerocopy maintainers</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <depend>hermoslib</depend>
+  <depend>rclpy_hermos</depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>binutils</exec_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

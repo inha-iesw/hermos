@@ -1,0 +1,1 @@
+KERNEL=="hermos_rclpy", SUBSYSTEM=="hermos_rclpy_class", GROUP="hermos", MODE="0660"

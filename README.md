@@ -11,7 +11,7 @@ CPU→GPU 업로드나 기존 배열을 공유 버퍼에 옮기는 복사까지 
 
 ## 빠른 시작
 
-ROS 2 Humble과 빌드 의존성, 별도 저장소인 `hermos/` backend 소스를 준비한 뒤
+ROS 2 Humble과 빌드 의존성, `hermos/` backend submodule 소스를 준비한 뒤
 워크스페이스 루트에서 실행합니다. 자세한 조건은 [환경 준비와 빌드](guides/developer/setup.md)를 참고하세요.
 
 ```bash

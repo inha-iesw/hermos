@@ -25,15 +25,17 @@ GPU 전송은 같은 supervisor에 등록된 별도 프로세스끼리 사용하
 
 | 구성 요소 | 용도 |
 |---|---|
-| ROS 2 Humble, Python 3.10, colcon, CMake, C++ 빌드 도구 | 메시지 타입, Python API, native extension 빌드 |
+| ROS 2 Humble, Python 3.10, colcon, CMake 3.20 이상, C++ 빌드 도구 | 메시지 타입, Python API, native extension·CPU wrapper 빌드 |
 | `hermos/` backend 소스, Rust/Cargo | 공유 힙 runtime과 heap hook 빌드 |
 | 호스트 커널에 맞는 모듈과 장치 접근 권한 | CPU 프로세스 간 공유 메모리 |
 | 메시지별 generated adapter | ROS 메시지 필드를 공유 메모리에 직접 연결 |
 | CUDA Toolkit/driver와 호환되는 PyTorch | CUDA Tensor 사용 시 추가 필요 |
 
-`hermos/`는 현재 별도 Git 저장소입니다. 이 바깥 저장소만 내려받으면 backend 소스까지
-자동으로 준비되지는 않습니다. backend와 Python adapter의 이름·버전이 맞는 소스를
-함께 준비해야 합니다. GPU core의 고정된 원본과 패치 준비는 아래 GPU 빌드 문서를 따릅니다.
+`hermos/`는 고정 revision을 가진 submodule입니다. 새 checkout에서는 사용자가
+`git submodule update --init --recursive`로 준비합니다. heap hook은 backend CMake 빌드에서
+함께 설치하며, 제공되는 `Cargo.lock`을 사용합니다. 첫 Cargo 빌드에는 해당 registry
+의존성을 받을 네트워크 또는 준비된 cache가 필요합니다. GPU core의 고정된 원본과 패치
+준비는 아래 GPU 빌드 문서를 따릅니다.
 
 ## CPU 패키지 빌드와 host 검증
 
