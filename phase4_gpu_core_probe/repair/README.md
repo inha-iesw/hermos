@@ -236,15 +236,26 @@ The tracked `session/run_device.py` requires an absolute, unused stage and a
 nonempty command. It verifies the artifact/source manifests before loading its
 module, waits for zero device holders before one normal unload attempt, and
 preserves test and teardown results separately. Teardown failure returns 70.
+Set `RCLPY_HERMOS_DEVICE_BUNDLE` to an absolute fresh bundle directory to select
+an alternative to `build/hermos/device-arm64`; the same manifest/hash checks
+apply. The runner passes that bundle's module to TLD via `RCLPY_HERMOS_KMOD`.
+`artifacts.json` must include `devmode` from `modinfo -F devmode` alongside
+`vermagic` and `srcversion`. Rebuild older modules without that metadata and
+capture fresh source/artifact manifests; do not relabel an old binary.
+After matching the loaded module, sysfs identity and node mode, the runner
+uses `sudo -n chgrp` only if its newly created device is inaccessible to the
+test process. It grants the current primary group access without changing
+the mode. A failed grant prevents the test command and still attempts normal
+teardown. Pre-existing modules and devices are rejected before loading.
 `TMPDIR` is unique to the session and `G3_PEER_LOG_ROOT` holds peer logs outside
 pytest's temporary-directory retention. Do not set a shared global
 `PYTEST_ADDOPTS=--basetemp=...`: different pytest targets can erase each other's
 files. Session runner/protocol regressions are registered in CTest; the previous
 runner and evidence under `log/g3/post-import-review-fixes/` remain frozen.
 
-The artifact manifest still refers to the existing nested HERMOS build and source identities. The
-nested fork remains uncommitted; an outer checkout alone cannot reconstruct those
-device artifacts. Runner promotion does not close that reproducibility gap.
+Artifact manifests pin the backend build and workspace source identities.
+Checking out the backend submodule does not regenerate a device bundle;
+stale bundles must be rebuilt before another device run.
 
 The isolated cleanup and collision executables require exactly one selected case
 per process and return an error for an empty filter. CTest registers each filter

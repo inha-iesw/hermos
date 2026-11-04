@@ -97,7 +97,7 @@ def _subscriber_path() -> Path:
     raise PreflightError(f"subscriber helper is missing or not executable: {rendered}")
 
 
-def _device_numbers(device: Path, module: str) -> tuple[int, int]:
+def _device_numbers(device: Path, module: str, expected_mode: str) -> tuple[int, int]:
     try:
         metadata = device.stat()
     except OSError as error:
@@ -127,7 +127,7 @@ def _device_numbers(device: Path, module: str) -> tuple[int, int]:
         raise PreflightError(
             f"device/sysfs major/minor mismatch: {numbers} != {sysfs_numbers}"
         )
-    if uevent.get("DEVNAME") != module or uevent.get("DEVMODE") != "0666":
+    if uevent.get("DEVNAME") != module or uevent.get("DEVMODE") != expected_mode:
         raise PreflightError(f"unexpected Hermos uevent identity/mode: {uevent}")
     if stat.S_IMODE(metadata.st_mode) != int(uevent["DEVMODE"], 8):
         raise PreflightError(f"{device} mode does not match its uevent")
@@ -195,10 +195,13 @@ def preflight() -> SystemConfig:
     )
     subscriber = _subscriber_path()
     module = _module_info(kmod, "name")
+    expected_mode = _module_info(kmod, "devmode")
+    if expected_mode not in ("0660", "0666"):
+        raise PreflightError(f"unsupported kmod devmode: {expected_mode}")
     device = Path("/dev") / module
-    numbers = _device_numbers(device, module)
-    _verify_shm_rw()
     srcversion = _verify_kmod(kmod, module)
+    numbers = _device_numbers(device, module, expected_mode)
+    _verify_shm_rw()
     return SystemConfig(
         hook, library, kmod, publisher_process, subscriber,
         device, numbers[0], numbers[1], srcversion,

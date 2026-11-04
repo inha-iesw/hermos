@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 import time
@@ -32,9 +33,10 @@ temporary.mkdir()
 peer_logs.mkdir()
 environment = os.environ.copy()
 environment.update(TMPDIR=str(temporary), G3_PEER_LOG_ROOT=str(peer_logs))
-artifact_root = root / 'build/hermos/device-arm64'
+artifact_root = Path(os.environ.get(
+    'RCLPY_HERMOS_DEVICE_BUNDLE', root / 'build/hermos/device-arm64')).resolve()
 manifest = json.loads((artifact_root / 'artifacts.json').read_text())
-record = {'command': command, 'verified_artifacts': {},
+record = {'command': command, 'verified_artifacts': {}, 'artifact_directory': str(artifact_root),
           'temporary_directory': str(temporary), 'peer_log_directory': str(peer_logs)}
 for name, entry in manifest['artifacts'].items():
     data = (artifact_root / name).read_bytes()
@@ -52,10 +54,15 @@ for name, expected in sources.items():
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == expected, name
 record['source_identity_files'] = sum(name != 'loaded_agnocast_srcversion' for name in sources)
 module = artifact_root / 'kmod/hermos_rclpy.ko'
+assert 'kmod/hermos_rclpy.ko' in record['verified_artifacts']
+assert subprocess.check_output(['modinfo', '-F', 'name', str(module)], text=True).strip() == 'hermos_rclpy'
+environment['RCLPY_HERMOS_KMOD'] = str(module)
 record['kernel'] = os.uname().release
-for key in ('vermagic', 'srcversion'):
+for key in ('vermagic', 'srcversion', 'devmode'):
     record[key] = subprocess.check_output(['modinfo', '-F', key, str(module)], text=True).strip()
+    assert record[key], f'missing module {key}; rebuild the device bundle from current sources'
     assert record[key] == manifest[key]
+assert record['devmode'] in ('0660', '0666')
 assert record['kernel'] == manifest['kernel']
 assert os.uname().machine == manifest['architecture']
 assert not Path('/sys/module/hermos_rclpy').exists()
@@ -73,6 +80,23 @@ try:
         assert time.monotonic() < deadline
         time.sleep(0.01)
     assert Path('/sys/module/hermos_rclpy/srcversion').read_text().strip() == record['srcversion']
+    device = Path('/dev/hermos_rclpy')
+    metadata = device.stat()
+    sysfs = Path('/sys/class/hermos_rclpy_class/hermos_rclpy')
+    assert stat.S_ISCHR(metadata.st_mode)
+    assert (sysfs / 'dev').read_text().strip() == (
+        f'{os.major(metadata.st_rdev)}:{os.minor(metadata.st_rdev)}')
+    uevent = dict(line.split('=', 1) for line in (sysfs / 'uevent').read_text().splitlines()
+                  if '=' in line)
+    assert uevent.get('DEVNAME') == device.name and uevent.get('DEVMODE') == record['devmode']
+    assert stat.S_IMODE(metadata.st_mode) == int(record['devmode'], 8)
+    if not os.access(device, os.R_OK | os.W_OK):
+        # This session owns the freshly loaded module and device. Grant only
+        # the test process's group access; never widen the node's mode.
+        subprocess.run(['sudo', '-n', 'chgrp', str(os.getgid()), str(device)], check=True)
+        record['test_device_group'] = os.getgid()
+    assert os.access(device, os.R_OK | os.W_OK), 'device is not readable and writable'
+    assert stat.S_IMODE(device.stat().st_mode) == int(record['devmode'], 8)
     with (stage / 'device-tests.log').open('w') as log:
         result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, env=environment)
     record['test_exit_code'] = result.returncode
