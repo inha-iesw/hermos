@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>hermos_cpu_examples</name>
+  <version>0.1.0</version>
+  <description>Installed CPU Image examples and integration checks for HERM0S.</description>
+  <maintainer email="maintainers@example.com">rclpy zerocopy maintainers</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <depend>hermos_runtime</depend>
+  <depend>hermoslib</depend>
+  <depend>sensor_msgs</depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>rclpy_hermos_adapters</exec_depend>
+  <exec_depend>hermos_launch</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>ros2run</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

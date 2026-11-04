@@ -33,10 +33,13 @@ source install/hermos/verify/local_setup.bash
 | [사용자 정의 메시지](guides/developer/custom-messages.md) | 메시지 타입별 adapter 생성·연결 |
 | [문제 해결](guides/developer/troubleshooting.md) | preload, QoS, proxy, publish·종료 오류 |
 
+CPU 앱에는 설치 wrapper와 `HermosNode`를 통한 `ros2 run/launch` 실행을 제공합니다.
+[관리자 모듈·장치 준비와 실행 예제](guides/developer/setup.md#설치된-cpu-앱-실행)를 참고하세요.
 현재는 소스 빌드와 실행 환경 준비가 필요한 개발 단계입니다. 실장치 근거는
 Thor의 Ubuntu 22.04 / ROS 2 Humble 컨테이너 환경을 중심으로 축적되어 있습니다.
-GPU는 같은 supervisor에 등록된 별도 프로세스 구성이 기준이며, 일반 `ros2 launch`
-배포나 임의의 플랫폼 조합이 검증된 상태는 아닙니다.
+GPU는 같은 supervisor에 등록된 별도 프로세스 구성이 기준이며, 일반 GPU `ros2 launch`
+배포나 임의의 플랫폼 조합이 검증된 상태는 아닙니다. DKMS 설치·재부팅 후 동작은
+배포 호스트에서 별도로 검증해야 합니다.
 
 ## 성능과 검증
 

@@ -14,9 +14,10 @@
 | 사용자 정의 메시지 adapter 생성 | `rclpy_hermos_codegen` |
 | C++ 연동 | CPU backend의 `hermoslib`와 GPU native core; Python과 같은 API는 아님 |
 
-현재는 **소스 빌드와 실행 환경 준비가 필요한 개발 단계**입니다. 실장치 근거는 Thor의
+현재는 **소스 빌드와 관리자 실행 환경 준비가 필요한 개발 단계**입니다. CPU 앱에는
+설치 wrapper와 `HermosNode` launch action을 제공합니다. 실장치 근거는 Thor의
 Ubuntu 22.04 / ROS 2 Humble 컨테이너 환경을 중심으로 축적되어 있습니다. 임의의 ROS 2
-배포판·GPU 조합이나 일반 `ros2 launch` 배포가 검증된 상태는 아닙니다.
+배포판·GPU 조합이나 일반 GPU `ros2 launch` 배포를 지원하는 것은 아닙니다.
 GPU 전송은 같은 supervisor에 등록된 별도 프로세스끼리 사용하는 구성을 기준으로 합니다.
 
 ## 필요한 구성 요소
@@ -59,9 +60,49 @@ source install/hermos/verify/local_setup.bash
   같은 디렉터리의 일치하는 `libhermos.so`.
 - `HERMOS_BRIDGE_MODE=off`, `HERMOS_NO_DISCOVERY_AGENT=1`.
 
-실행 환경 준비와 재현 가능한 CPU 전송 시험은 [CPU 시나리오](../../experiments/g5/cpu_latency/README.md)를
-참고하세요. 현재 이 시나리오의 CPU 등록 코드는 benchmark 전용이며, 범용 CPU supervisor
-launcher를 제공하는 것은 아닙니다. [CPU 메시지 가이드](cpu-messages.md)의 코드는 준비된 프로세스에 넣는 애플리케이션 예제입니다.
+## 설치된 CPU 앱 실행
+
+관리자는 먼저 설치본의 `share/hermos_runtime/system/`에 포함된
+[CPU 관리자 계약](../../hermos_runtime/packaging/system/README.md)에 따라
+`hermos_rclpy` 모듈과 `/dev/hermos_rclpy` 접근 권한을 준비합니다. v1 장치 정책은
+root:hermos·0660입니다. colcon과 앱 wrapper는 시스템 설정을 설치하거나 module을 적재하지 않습니다.
+DKMS 설치·다른 커널·udev·재부팅 수용은 해당 호스트에서 별도로 검증해야 합니다.
+장치 TLD는 선택한 `.ko`의 `modinfo -F devmode`를 실제 장치 mode와 대조합니다.
+이 정보가 없는 예전 bundle은 현재 소스로 다시 빌드해야 합니다.
+임시 시험용 적재·그룹 부여·해제는 [정식 장치 runner](../../phase4_gpu_core_probe/repair/README.md)의
+계약을 따릅니다.
+
+앞의 CPU 빌드는 `hermos_runtime`, `hermos_launch`, 설치 예제 `hermos_cpu_examples`를
+포함합니다. 같은 ROS overlay를 source한 두 터미널에서 다음과 같이 실행합니다.
+subscriber를 먼저 실행하고, publisher가 subscriber의 제한 시간 안에 시작되도록 합니다.
+
+```bash
+# 터미널 1
+ros2 run hermos_cpu_examples image_peer --role subscriber
+# 터미널 2
+ros2 run hermos_cpu_examples image_peer --role publisher
+```
+
+launch 예제는 namespace, topic remap, parameter YAML과 앱 인자를 함께 전달합니다.
+
+```bash
+ros2 launch hermos_cpu_examples cpu_pipeline.launch.py namespace:=camera
+```
+
+예제는 유한 개수의 Image를 전송하고 전체 byte 내용과 수신 수를 확인한 뒤 종료합니다.
+C++ 수신 예제는 `ros2 run hermos_cpu_examples cpp_image_reader`, C++ 발행 예제는
+`ros2 run hermos_cpu_examples cpp_image_peer --ros-args -p role:=publisher`입니다.
+이 독립 CPU 실행에는 GPU supervisor나 private GPU epoch가 필요하지 않습니다.
+
+wrapper는 ament가 선택한 `share/hermos_runtime/cpu-manifest.json`을 통해 library·heap hook·
+native extension·registry의 hash와 provider ABI를 확인합니다. prefix는 설치 위치 기준으로
+해석하며, 앱 import 전 환경을 구성하고 `exec`합니다. `LD_PRELOAD`를 터미널 전체에 export할
+필요가 없습니다. 이미 설정한 다른 preload는 절대경로여야 하며 경쟁 allocator는 거부합니다.
+누락 module, 장치 접근 거부, 혼합 artifact 오류를 먼저 해결하세요. CPU 설치에 CUDA/Torch는 필요하지 않습니다.
+
+애플리케이션 등록 방법은 [CPU 메시지 가이드](cpu-messages.md#앱을-ros2-runlaunch에-등록하기),
+성능 측정은 [CPU 시나리오](../../experiments/g5/cpu_latency/README.md)를 참고하세요.
+benchmark의 CPU 등록 코드는 별도 GPU 그룹 시험용이며 독립 CPU wrapper와 구분합니다.
 
 ## GPU 패키지 빌드
 

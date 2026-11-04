@@ -20,7 +20,52 @@ HERMOS publisher에 일반 `Image()` 객체를 전달하거나, 받은 메시지
 지원하지 않습니다.
 
 기존 코드를 이전할 때는 import뿐 아니라 ROS 패키지 의존성, generated adapter,
-환경변수와 peer 실행 파일도 함께 맞추세요. 이전 이름에 대한 호환 alias는 제공하지 않습니다.
+peer 실행 파일도 함께 맞추세요. 설치 wrapper가 peer 환경을 준비합니다.
+이전 이름에 대한 호환 alias는 제공하지 않습니다.
+
+## 앱을 ros2 run/launch에 등록하기
+
+관리자가 [CPU 모듈·장치 권한](setup.md#설치된-cpu-앱-실행)을 준비한 환경에서 사용합니다.
+앱의 `main()`은 ROS 인자를 포함한 `sys.argv`를 받아 기존처럼 `rclpy.init()`을 호출하고,
+종료 시 자신의 endpoint·alias·Node를 정리합니다. 앱 entry module을 bootstrap 전에 import하지 않습니다.
+
+`ament_cmake` 앱은 `package.xml`에 `hermos_runtime`과 필요한 adapter 의존성을 선언한 뒤
+다음 helper로 실행 파일을 설치합니다. 앱 Python package 자체의 설치는 기존 빌드 규칙을 따릅니다.
+
+```cmake
+find_package(hermos_runtime REQUIRED)
+hermos_install_cpu_executable(camera_pub
+  PYTHON_ENTRY my_pkg.camera:main
+  PROVIDERS rclpy_hermos_adapters)
+# C++ 앱은 PYTHON_ENTRY 대신 이미 정의한 executable TARGET을 지정합니다.
+```
+
+`ament_python` 앱은 console entry point를 앱을 import하지 않는 bootstrap 함수에 연결합니다.
+
+```python
+def camera_pub():
+    from hermos_runtime.cpu import run
+    return run('my_pkg.camera:main', providers=['rclpy_hermos_adapters'])
+```
+
+이 wrapper를 `lib/<app_package>/<executable>`에 설치하면 `ros2 run my_pkg camera_pub`로
+실행할 수 있습니다. launch에서는 `hermos_launch` 의존성을 추가하고 다음처럼 사용합니다.
+
+```python
+from hermos_launch.actions import HermosNode
+
+camera = HermosNode(
+    package='my_pkg', executable='camera_pub',
+    namespace='camera', remappings=[('image', 'frames')],
+    parameters=[{'label': 'camera with spaces'}],
+    providers=['rclpy_hermos_adapters'],
+)
+```
+
+표준 Node의 이름·namespace·remap·parameter·arguments 처리를 사용하며 환경은 해당 peer에만
+적용합니다. 일반 DDS Node나 `ros2` CLI 전체에 heap hook을 적용하지 않습니다.
+`ROS_DOMAIN_ID`는 같은 프로세스의 Python/native runtime이 함께 사용하므로
+`rclpy.Context.init(domain_id=...)`로 환경과 다른 domain을 별도로 지정하지 않습니다.
 
 ## Image 발행·구독
 
