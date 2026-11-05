@@ -316,7 +316,9 @@ def test_pidfd_open_failure_kills_unreaped_child_and_prevents_restart(
         instance.restart()
 
 
-def run_isolated_cli(monkeypatch, tmp_path, outcomes, *, requested_signal=None):
+def run_isolated_cli(monkeypatch, tmp_path, outcomes, *, requested_signal=None,
+                     startup_signal=False, startup_failure=False, stop_failure=False,
+                     constructor_failure=False, max_restarts=1):
     cli = cli_module
     config = tmp_path / 'config.json'
     config.write_text(json.dumps({'commands': [{'argv': ['unused-peer']}]}))
@@ -325,13 +327,20 @@ def run_isolated_cli(monkeypatch, tmp_path, outcomes, *, requested_signal=None):
 
     class Epoch:
         def __init__(self, commands, path, startup, stop):
+            if constructor_failure:
+                raise ValueError('invalid execution environment')
             self.stage = path
             self.stage.mkdir()
             self.calls = []
             self.result = outcomes[min(len(epochs), len(outcomes) - 1)]
+            self.epoch_dir = path / 'reported-worker-log-directory'
             epochs.append(self)
         def start(self):
             self.calls.append('start')
+            if startup_signal:
+                handlers[signal.SIGTERM](signal.SIGTERM, None)
+            if startup_failure:
+                raise RuntimeError('startup cleanup was incomplete')
             return self
         def poll(self):
             if requested_signal is not None:
@@ -343,12 +352,15 @@ def run_isolated_cli(monkeypatch, tmp_path, outcomes, *, requested_signal=None):
             return dict(self.result)
         def stop(self):
             self.calls.append('stop')
+            if stop_failure:
+                raise RuntimeError('worker teardown previously failed')
             return dict(self.result)
 
     monkeypatch.setattr(cli, 'IsolatedEpoch', Epoch)
     monkeypatch.setattr(cli.signal, 'signal', lambda number, handler: handlers.update({number: handler}))
     monkeypatch.setattr(sys, 'argv', ['hermos_supervisor', str(config), '--stage', str(stage),
-                                     '--startup-timeout', '2', '--stop-timeout', '0.2'])
+                                     '--startup-timeout', '2', '--stop-timeout', '0.2',
+                                     '--max-restarts', str(max_restarts)])
     code = cli.main()
     return code, json.loads((stage / 'cli.json').read_text()), epochs
 
@@ -381,6 +393,71 @@ def test_cli_signal_stops_its_owned_epoch_and_records_exit(tmp_path, monkeypatch
         monkeypatch, tmp_path, [outcome], requested_signal=signal.SIGTERM)
     assert code == summary['exit_code'] == 128 + signal.SIGTERM
     assert len(epochs) == 1 and epochs[0].calls == ['start', 'stop']
+    assert summary['verified_teardown'] and summary['state'] == 'stopped'
+
+
+def test_cli_signal_does_not_report_unverified_teardown_as_stopped(tmp_path, monkeypatch):
+    outcome = dict(peer_failed=False, retry_allowed=False,
+                   verified_teardown=False, requested_stop=True)
+    code, summary, epochs = run_isolated_cli(
+        monkeypatch, tmp_path, [outcome], requested_signal=signal.SIGTERM)
+    assert code != 0
+    assert summary['verified_teardown'] is False and summary['state'] == 'incomplete'
+    assert summary['restarts'] == 0
+
+
+@pytest.mark.parametrize('startup_failure', [False, True])
+def test_signal_during_startup_drains_without_restart(tmp_path, monkeypatch, startup_failure):
+    outcome = dict(peer_failed=False, retry_allowed=False,
+                   verified_teardown=not startup_failure, requested_stop=True)
+    code, summary, epochs = run_isolated_cli(
+        monkeypatch, tmp_path, [outcome], startup_signal=True, startup_failure=startup_failure)
+    assert code == 143 and summary['restarts'] == 0
+    assert len(epochs) == 1 and epochs[0].calls == ['start', 'stop']
+    assert summary['state'] == ('incomplete' if startup_failure else 'stopped')
+
+
+def test_zero_restart_limit_stops_after_first_failed_epoch(tmp_path, monkeypatch):
+    outcome = dict(peer_failed=True, retry_allowed=True,
+                   verified_teardown=True, requested_stop=False)
+    code, summary, epochs = run_isolated_cli(monkeypatch, tmp_path, [outcome], max_restarts=0)
+    assert code == 1 and summary['restarts'] == 0 and len(epochs) == 1
+
+
+def test_signal_preserves_peer_failure_even_after_confirmed_cleanup(tmp_path, monkeypatch):
+    outcome = dict(peer_failed=True, retry_allowed=False,
+                   verified_teardown=True, requested_stop=True)
+    code, summary, _ = run_isolated_cli(monkeypatch, tmp_path, [outcome],
+                                       requested_signal=signal.SIGTERM)
+    assert code == 143 and summary['verified_teardown'] and summary['peer_failed']
+
+
+def test_successful_restart_reports_only_latest_epoch_peer_status(tmp_path, monkeypatch):
+    outcomes = [dict(peer_failed=True, retry_allowed=True, verified_teardown=True, requested_stop=False),
+                dict(peer_failed=False, retry_allowed=False, verified_teardown=True, requested_stop=False)]
+    code, summary, epochs = run_isolated_cli(monkeypatch, tmp_path, outcomes)
+    assert code == 0 and len(epochs) == 2 and summary['peer_failed'] is False
+
+
+def test_start_and_stop_failure_do_not_claim_healthy_peers(tmp_path, monkeypatch):
+    code, summary, _ = run_isolated_cli(monkeypatch, tmp_path, [{}],
+                                       startup_failure=True, stop_failure=True)
+    assert code != 0 and summary['peer_failed'] is not False
+    assert not summary['verified_teardown'] and summary['state'] == 'incomplete'
+
+
+def test_constructor_failure_has_no_epoch_to_clean(tmp_path, monkeypatch):
+    code, summary, epochs = run_isolated_cli(monkeypatch, tmp_path, [{}], constructor_failure=True)
+    assert code != 0 and not epochs and summary['verified_teardown']
+    assert summary['peer_failed'] is False and summary['state'] == 'stopped'
+
+
+def test_announced_logs_use_worker_reported_directory(tmp_path, monkeypatch, capsys):
+    outcome = dict(peer_failed=False, retry_allowed=False, verified_teardown=True, requested_stop=False)
+    _, _, epochs = run_isolated_cli(monkeypatch, tmp_path, [outcome])
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    ready = next(event for event in events if event['state'] == 'registration-ready')
+    assert ready['peers'][0]['stdout'] == str(epochs[0].epoch_dir / 'peer-0.stdout')
 
 
 def test_missing_later_executable_is_resolved_before_any_peer_spawn(tmp_path, child_file):

@@ -17,6 +17,22 @@ BOOTSTRAP = Path('/usr/local/libexec/rclpy-zc-gpu/namespace-bootstrap.py')
 REQUIRED_ENVIRONMENT = {'HERMOS_BRIDGE_MODE': 'off', 'HERMOS_NO_DISCOVERY_AGENT': '1'}
 
 
+def _worker_teardown_budget(startup_timeout, stop_timeout):
+    return startup_timeout + 4 * stop_timeout + 2
+
+
+def supervisor_shutdown_timeout(startup_timeout, stop_timeout):
+    """Conservative launch grace period, including startup and cleanup retries.
+
+    Startup may still write the request and ACK and await registration. Each of
+    two cleanup attempts can write stop, wait for sudo, then wait for the actual
+    worker. Five seconds covers evidence/handle processing under normal local
+    filesystem operation. This is a signal escalation policy, not an I/O bound.
+    """
+    return (startup_timeout + 4 * stop_timeout +
+            4 * _worker_teardown_budget(startup_timeout, stop_timeout) + 5)
+
+
 def installed_prefix():
     """Reject mixed runtime origins before choosing bootstrap and worker files."""
     return validate_installation()
@@ -165,7 +181,7 @@ class IsolatedEpoch:
 
     def _teardown_budget(self):
         # Startup/registration, pending peer write, TERM, KILL, descendant drain.
-        return self.startup_timeout + 4 * self.stop_timeout + 2
+        return _worker_teardown_budget(self.startup_timeout, self.stop_timeout)
 
     def _peer_states(self):
         states = {}
