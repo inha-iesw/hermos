@@ -10,6 +10,8 @@ from threading import Event, Thread
 import time
 import traceback
 
+from hermos_runtime.supervision.factory import initialise_context, parse_factory, require_nodes
+
 
 class _TerminationDeadline:
     """Bound supported native calls even when the main thread cannot handle TERM.
@@ -92,10 +94,13 @@ def _draining_executor(*, context):
 def main(argv=None):
     """Initialize one GPU epoch, call ``module:factory(runtime, args)``, then spin.
 
-    The factory returns one rclpy Node or a sequence of Nodes. It creates endpoints
-    and timers but must not spin or publish before returning. The direct process
-    registers its full inventory before dispatch. TERM stops new dispatch while
-    existing coroutine continuations and client replies can return GPU owners.
+    The factory returns one rclpy Node or a sequence using ``runtime.ros_context``.
+    It creates endpoints and timers but must not spin or publish before returning.
+    ROS arguments after the factory configure the owned context; the factory
+    receives only application arguments. The direct process registers its full
+    inventory before dispatch.
+    TERM stops new dispatch while existing coroutine continuations and client
+    replies can return GPU owners.
     Futures requiring new timer/service callbacks may reach the three-second drain
     deadline; busy or poisoned drain exits nonzero. Arbitrary native calls
     that block the interpreter remain subject to the supervisor's failure timeout.
@@ -109,8 +114,10 @@ def main(argv=None):
     parser.add_argument('factory', help='importable module:function returning Node(s)')
     parser.add_argument('application_args', nargs=argparse.REMAINDER)
     options = parser.parse_args(argv)
-    if ':' not in options.factory:
-        parser.error('factory must be module:function')
+    try:
+        module, name = parse_factory(options.factory)
+    except ValueError as error:
+        parser.error(str(error))
 
     # This entry point owns signals before importing application/Torch code or
     # creating CUDA resources. rclpy must not tear its context down first.
@@ -131,27 +138,22 @@ def main(argv=None):
     status = 0
     context = None
     try:
-        import rclpy
         from rclpy.context import Context
-        from rclpy.node import Node
-        from rclpy.signals import SignalHandlerOptions
+        from rclpy.executors import ExternalShutdownException
         from .runtime import GpuRuntime
 
         context = Context()
-        rclpy.init(args=[], context=context, signal_handler_options=SignalHandlerOptions.NO)
+        application_args = initialise_context(context, options.application_args)
         runtime = GpuRuntime(block_count=options.blocks, block_bytes=options.block_bytes,
                              device=options.device, max_reads=options.max_reads,
                              max_message_bytes=options.max_message_bytes)
         runtime.initialise()
-        module, name = options.factory.split(':', 1)
         factory = getattr(importlib.import_module(module), name)
         # Factories use the launcher's context explicitly via this attribute;
         # no global/default rclpy context is implicitly created.
         runtime.ros_context = context
-        application = factory(runtime, options.application_args)
-        nodes = [application] if isinstance(application, Node) else list(application)
-        if not nodes or any(not isinstance(node, Node) for node in nodes):
-            raise TypeError('GPU peer factory must return rclpy Node(s)')
+        application = factory(runtime, application_args)
+        require_nodes(application, context, owned_nodes=nodes)
         # Hermos init installs native handlers during endpoint setup. Keep TERM
         # under launcher control so its workers survive until ordered owner drain.
         for number in previous:
@@ -164,7 +166,12 @@ def main(argv=None):
         runtime.register()
         while context.ok() and not stopping:
             runtime.poll()
-            executor.spin_once(timeout_sec=0.01)
+            try:
+                executor.spin_once(timeout_sec=0.01)
+            except ExternalShutdownException:
+                if context.ok():
+                    raise
+                break
     except BaseException as error:
         traceback.print_exc()
         traceback.clear_frames(error.__traceback__)
@@ -186,7 +193,8 @@ def main(argv=None):
                 status = 70
         if executor is not None:
             try:
-                executor.shutdown(timeout_sec=0)
+                if not executor.shutdown(timeout_sec=0):
+                    raise RuntimeError('GPU executor shutdown is incomplete')
             except BaseException:
                 traceback.print_exc()
                 status = 70
@@ -196,10 +204,19 @@ def main(argv=None):
             except BaseException:
                 traceback.print_exc()
                 status = 70
-        if context is not None and context.ok():
-            context.shutdown()
+        if context is not None:
+            try:
+                if context.ok():
+                    context.shutdown()
+            except BaseException:
+                traceback.print_exc()
+                status = 70
         if deadline is not None:
-            deadline.close()
+            try:
+                deadline.close()
+            except BaseException:
+                traceback.print_exc()
+                status = 70
         for number, handler in previous.items():
             signal.signal(number, handler)
     return status

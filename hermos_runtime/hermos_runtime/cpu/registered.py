@@ -6,6 +6,8 @@ import signal
 import sys
 import traceback
 
+from ..supervision.factory import initialise_context, parse_factory, require_nodes
+
 
 def main(argv=None):
     """Call ``module:factory(context, args)``, register its endpoints, then spin.
@@ -26,9 +28,10 @@ def main(argv=None):
     parser.add_argument('factory', help='module:function returning Node(s)')
     parser.add_argument('application_args', nargs=argparse.REMAINDER)
     options = parser.parse_args(argv)
-    module, separator, function = options.factory.partition(':')
-    if not separator or not module or not function.isidentifier():
-        parser.error('factory must be module:function')
+    try:
+        module, function = parse_factory(options.factory)
+    except ValueError as error:
+        parser.error(str(error))
 
     stopping = False
 
@@ -45,25 +48,14 @@ def main(argv=None):
         from ..supervision.registration import Registration
 
         registration = Registration.from_environment(required=True)
-        import rclpy
         from rclpy.context import Context
         from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
-        from rclpy.node import Node
-        from rclpy.signals import SignalHandlerOptions
-        from rclpy.utilities import remove_ros_args
 
-        application_args = remove_ros_args([options.factory, *options.application_args])[1:]
         context = Context()
-        rclpy.init(args=options.application_args, context=context,
-                   signal_handler_options=SignalHandlerOptions.NO)
+        application_args = initialise_context(context, options.application_args)
         factory = getattr(importlib.import_module(module), function)
         application = factory(context, application_args)
-        returned = [application] if isinstance(application, Node) else list(application)
-        nodes = [node for node in returned if isinstance(node, Node)]
-        if not nodes or len(nodes) != len(returned):
-            raise TypeError('CPU peer factory must return rclpy Node(s)')
-        if any(node.context is not context for node in nodes):
-            raise ValueError('CPU peer nodes must use the supplied context')
+        require_nodes(application, context, owned_nodes=nodes)
         # Endpoint initialization may replace native handlers; reclaim signal
         # ownership before ACK so teardown precedes context invalidation.
         for number in previous:

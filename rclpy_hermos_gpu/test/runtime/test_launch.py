@@ -203,6 +203,9 @@ def test_launcher_polls_without_callbacks_and_cleans_up_before_return(
             self.active = False
 
     class Node:
+        def __init__(self, context):
+            self.context = context
+
         def destroy_node(self):
             events.append('node-close')
 
@@ -232,6 +235,7 @@ def test_launcher_polls_without_callbacks_and_cleans_up_before_return(
         def shutdown(self, *, timeout_sec):
             assert timeout_sec == 0
             events.append('executor-close')
+            return True
 
     class Runtime:
         def __init__(self, **configuration):
@@ -256,7 +260,7 @@ def test_launcher_polls_without_callbacks_and_cleans_up_before_return(
     rclpy = ModuleType('rclpy')
 
     def init(*, args, context, signal_handler_options):
-        assert args == [] and context.ok()
+        assert args == ['application-argument'] and context.ok()
         assert signal_handler_options == 'no-signal-handlers'
         events.append('rclpy-init')
 
@@ -268,7 +272,7 @@ def test_launcher_polls_without_callbacks_and_cleans_up_before_return(
             # Hermos init installs a native handler that chains CPython's signal
             # handler and stops its worker. signal.getsignal() cannot see this swap.
             assert library.install_native_term() == 0
-        return Node()
+        return Node(runtime.ros_context)
 
     rclpy.init = init
     for name, module in {
@@ -281,6 +285,7 @@ def test_launcher_polls_without_callbacks_and_cleans_up_before_return(
         'rclpy.node': SimpleNamespace(Node=Node),
         'rclpy.signals': SimpleNamespace(
             SignalHandlerOptions=SimpleNamespace(NO='no-signal-handlers')),
+        'rclpy.utilities': SimpleNamespace(remove_ros_args=lambda args: args),
         'g4_test_application': SimpleNamespace(factory=factory),
     }.items():
         monkeypatch.setitem(sys.modules, name, module)
@@ -298,3 +303,75 @@ def test_launcher_polls_without_callbacks_and_cleans_up_before_return(
     else:
         assert 'spin-without-callback' in events
     assert {number: signal.getsignal(number) for number in before_handlers} == before_handlers
+
+
+def test_ros_settings_reach_owned_context_and_factory_receives_only_application_args(
+        tmp_path, monkeypatch):
+    from rclpy.node import Node
+
+    configuration = tmp_path / 'parameters with spaces.yaml'
+    configuration.write_text('/**:\n  ros__parameters:\n    label: "한글 parameter"\n')
+    events = []
+    observed = {}
+
+    class Runtime:
+        def __init__(self, **configuration):
+            pass
+
+        def initialise(self):
+            events.append('initialise')
+
+        def register(self):
+            events.append('register')
+
+        def poll(self):
+            events.append('poll')
+
+        def shutdown(self, *, timeout, progress):
+            events.append('runtime-close')
+
+    class Executor:
+        def __init__(self, *, context):
+            self.context = context
+
+        def add_node(self, node):
+            pass
+
+        def spin_once(self, *, timeout_sec):
+            events.append('spin')
+            self.context.shutdown()
+
+        def begin_drain(self):
+            pass
+
+        def progress(self):
+            pass
+
+        def shutdown(self, *, timeout_sec):
+            events.append('executor-close')
+            return True
+
+    def factory(runtime, arguments):
+        events.append('factory')
+        node = Node('original_name', context=runtime.ros_context)
+        node.declare_parameter('label', '')
+        observed.update(arguments=arguments, name=node.get_name(),
+                        namespace=node.get_namespace(), topic=node.resolve_topic_name('image'),
+                        label=node.get_parameter('label').value)
+        return node
+
+    monkeypatch.setitem(sys.modules, 'gpu_ros_arguments_application', SimpleNamespace(factory=factory))
+    monkeypatch.setattr(runtime_module, 'GpuRuntime', Runtime)
+    monkeypatch.setattr(launch, '_draining_executor', Executor)
+    monkeypatch.setenv('ROS_LOG_DIR', str(tmp_path / 'ros-log'))
+    status = launch.main([
+        '--block-bytes', '4096', '--max-reads', '2', '--max-message-bytes', '4096',
+        'gpu_ros_arguments_application:factory', '공백 argument',
+        '--ros-args', '-r', '__node:=gpu_camera', '-r', '__ns:=/camera',
+        '-r', 'image:=frames', '--params-file', str(configuration), '--', 'after-ros'])
+
+    assert status == 0
+    assert observed == dict(arguments=['공백 argument', 'after-ros'], name='gpu_camera',
+                            namespace='/camera', topic='/camera/frames', label='한글 parameter')
+    assert events == ['initialise', 'factory', 'register', 'poll', 'spin',
+                      'runtime-close', 'executor-close']
