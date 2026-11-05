@@ -10,6 +10,7 @@ import time
 
 from .group import RecoveryError, validate
 from .control import write_pipe
+from .installation import validate_installation
 
 
 BOOTSTRAP = Path('/usr/local/libexec/rclpy-zc-gpu/namespace-bootstrap.py')
@@ -17,9 +18,8 @@ REQUIRED_ENVIRONMENT = {'HERMOS_BRIDGE_MODE': 'off', 'HERMOS_NO_DISCOVERY_AGENT'
 
 
 def installed_prefix():
-    """Locate runtime resources through the active ROS installation."""
-    from ament_index_python.packages import get_package_prefix
-    return Path(get_package_prefix('hermos_runtime'))
+    """Reject mixed runtime origins before choosing bootstrap and worker files."""
+    return validate_installation()
 
 
 def trusted_bootstrap():

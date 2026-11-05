@@ -1,6 +1,10 @@
 #!/usr/bin/python3
 """Run the installed direct-peer supervisor."""
 
+from pathlib import Path
+
+from hermos_runtime.supervision.installation import validate_installation
 from hermos_runtime.supervision.run import main
 
+validate_installation(prefix=Path(__file__).absolute().parents[2])
 raise SystemExit(main())

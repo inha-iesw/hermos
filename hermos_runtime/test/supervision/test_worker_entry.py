@@ -57,6 +57,15 @@ def test_relocated_entry_ignores_cwd_and_finds_only_installed_package(installati
     assert output['args'] == ['stage', '{}']
 
 
+def test_symlinked_worker_entry_keeps_the_invoked_installation(installation, tmp_path):
+    prefix, entry, _ = installation
+    entry.unlink()
+    entry.symlink_to(SOURCE)
+    result = launch(entry, tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)['file'].startswith(str(prefix))
+
+
 @pytest.mark.parametrize('python_dir', ['/tmp', '../../escape', '.', ''])
 def test_entry_rejects_manifest_paths_outside_installation(installation, tmp_path, python_dir):
     _, entry, share = installation
