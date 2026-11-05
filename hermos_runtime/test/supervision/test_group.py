@@ -383,6 +383,37 @@ def test_cli_signal_stops_its_owned_epoch_and_records_exit(tmp_path, monkeypatch
     assert len(epochs) == 1 and epochs[0].calls == ['start', 'stop']
 
 
+def test_missing_later_executable_is_resolved_before_any_peer_spawn(tmp_path, child_file):
+    commands = [{'argv': [sys.executable, str(child_file), 'healthy']},
+                {'package': 'nonexistent_package', 'argv': ['missing']}]
+    instance = recovery.Group(commands, tmp_path / 'stage', stop_timeout=0.1)
+    with pytest.raises(recovery.RecoveryError, match='package not found'):
+        instance.start()
+    assert not instance.processes and evidence(instance)[0]['peers'] == []
+
+
+@pytest.mark.parametrize('version', [None, 1])
+def test_legacy_and_version_one_command_configs_are_accepted(version):
+    config = {'commands': [{'argv': ['peer']}]}
+    if version is not None:
+        config['version'] = version
+    recovery.validate_config(config, 1, 1)
+
+
+@pytest.mark.parametrize('config', [
+    {'version': 2, 'commands': [{'argv': ['peer']}]},
+    {'version': True, 'commands': [{'argv': ['peer']}]},
+    {'commands': [{'argv': ['peer']}], 'unexpected': 1},
+    {'commands': [{'argv': ['peer'], 'unexpected': 1}]},
+    {'commands': [{'argv': ['peer'], 'id': '../peer'}]},
+    {'commands': [{'argv': ['peer'], 'role': 'unknown'}]},
+    {'commands': [{'argv': ['peer'], 'id': 'same'}, {'argv': ['peer'], 'id': 'same'}]},
+])
+def test_unknown_schema_and_invalid_peer_metadata_fail_closed(config):
+    with pytest.raises(ValueError):
+        recovery.validate_config(config, 1, 1)
+
+
 @pytest.mark.parametrize('changed', [
     {'verified_teardown': False}, {'retry_allowed': False}, {'requested_stop': True},
 ])

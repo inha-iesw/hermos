@@ -99,7 +99,7 @@ class IsolatedEpoch:
                 text=True, cwd='/', env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin',
                                 'PYTHONDONTWRITEBYTECODE': '1'})
             (self.stage / 'launcher.json').write_text(json.dumps({'wrapper_pid': self.process.pid}) + '\n')
-            self._send({'commands': self.commands, 'environment': dict(os.environ),
+            self._send({'version': 1, 'commands': self.commands, 'environment': dict(os.environ),
                         'cwd': str(Path.cwd()),
                         'startup_timeout': self.startup_timeout, 'stop_timeout': self.stop_timeout})
             deadline = time.monotonic() + self.startup_timeout

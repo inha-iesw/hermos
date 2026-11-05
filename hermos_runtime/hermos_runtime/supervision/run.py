@@ -6,7 +6,7 @@ from pathlib import Path
 import signal
 import time
 
-from .group import validate
+from .group import validate_config
 from .isolated import IsolatedEpoch
 
 
@@ -22,7 +22,7 @@ def main():
     if args.max_restarts < 0:
         parser.error('--max-restarts must be nonnegative')
     config = json.loads(args.config.read_text())
-    validate(config['commands'], args.startup_timeout, args.stop_timeout)
+    validate_config(config, args.startup_timeout, args.stop_timeout)
     if not args.stage.is_absolute() or args.stage.resolve().is_relative_to('/dev/shm'):
         parser.error('--stage must be absolute and outside /dev/shm')
     args.stage.mkdir(mode=0o700, exist_ok=False)

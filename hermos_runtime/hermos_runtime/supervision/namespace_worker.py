@@ -11,7 +11,7 @@ import signal
 import sys
 import time
 
-from .group import Group
+from .group import Group, validate
 from .control import JsonInput, write_pipe
 
 
@@ -147,6 +147,10 @@ def main():
         verified = True
         control = JsonInput(sys.stdin.fileno())
         request = control.read(10)
+        if (not isinstance(request, dict) or type(request.get('version')) is not int or
+                request['version'] != 1):
+            raise ValueError('unsupported namespace worker request version')
+        validate(request['commands'], request['startup_timeout'], request['stop_timeout'])
         # Handshake lets the unprivileged owner pin the actual worker, not sudo.
         start_time = process_start_time(os.getpid())
         save(stage / 'worker.json', {'pid': os.getpid(), 'start_time': start_time,

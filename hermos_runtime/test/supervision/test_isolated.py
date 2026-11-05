@@ -130,6 +130,7 @@ def test_owner_pins_actual_worker_before_ack_and_preserves_peer_only_preload(mon
     epoch, state, wrapper = simulated_epoch(monkeypatch, tmp_path)
     assert epoch.start() is epoch
     assert state['opened'] == [9020] and wrapper.pid != state['opened'][0]
+    assert state['messages'][0]['version'] == 1
     assert state['messages'][0]['commands'][0]['env']['LD_PRELOAD'] == '/peer-only/hook'
     assert state['messages'][0]['environment'] == {'INHERITED': 'preserved', **isolated.REQUIRED_ENVIRONMENT}
     assert 'groups' not in state['messages'][0] and 'shm_bytes' not in state['messages'][0]

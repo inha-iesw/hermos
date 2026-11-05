@@ -29,7 +29,7 @@ def block_privileged_or_unowned_operations(monkeypatch):
     monkeypatch.setattr(signal, 'pidfd_send_signal', blocked)
 
 
-def unprivileged_main(monkeypatch, tmp_path, problem=None):
+def unprivileged_main(monkeypatch, tmp_path, problem=None, request_override=None):
     stage = tmp_path / 'worker-stage'
     stage.mkdir()
     isolation = {'uid': 1000, 'gid': 1000, 'groups': [44, 1000],
@@ -58,7 +58,10 @@ def unprivileged_main(monkeypatch, tmp_path, problem=None):
     monkeypatch.setattr(os, 'stat', information)
     monkeypatch.setattr(sys, 'argv', ['namespace_worker.py', str(stage), json.dumps(isolation)])
     monkeypatch.setattr(sys, 'stdin', SimpleNamespace(fileno=lambda: 98765))
-    request = {'startup_timeout': 1}
+    request = {'version': 1, 'commands': [{'argv': ['unused-peer']}],
+               'startup_timeout': 1, 'stop_timeout': 0.1}
+    if request_override is not None:
+        request.update(request_override)
     class Control:
         def __init__(self):
             self.messages = iter([request, {'ack': True}])
@@ -80,6 +83,21 @@ def test_nonroot_worker_verifies_bootstrap_handoff_before_ack_and_peers(monkeypa
     assert calls == ['read', 'read', 'peers']
     assert json.loads((stage / 'worker.json').read_text())['isolation']['uid'] == 1000
     assert json.loads((stage / 'worker-result.json').read_text())['teardown_complete']
+
+
+@pytest.mark.parametrize('override', [
+    {'version': 2}, {'version': True}, {'version': None}, {'commands': []},
+    {'commands': [{'argv': ['unused-peer'], 'unknown': True}]},
+])
+def test_worker_rejects_invalid_request_before_identity_ack_or_peer_spawn(
+        monkeypatch, tmp_path, override):
+    stage, calls = unprivileged_main(monkeypatch, tmp_path, request_override=override)
+    assert worker.main() == 70
+    assert calls == ['read']
+    assert not (stage / 'worker.json').exists()
+    result = json.loads((stage / 'worker-result.json').read_text())
+    assert not result['teardown_complete'] and not result['retry_allowed']
+    assert 'error' in result
 
 
 @pytest.mark.parametrize('problem', ['root', 'saved_uid', 'groups', 'namespace', 'inventory',

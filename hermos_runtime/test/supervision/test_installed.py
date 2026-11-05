@@ -27,7 +27,7 @@ def relocated(tmp_path):
     marker = prefix / 'share/ament_index/resource_index/packages/hermos_runtime'
     marker.parent.mkdir(parents=True)
     marker.touch()
-    cpp = prefix / 'registration_peer'
+    cpp = prefix / 'lib/hermos_runtime/registration_peer'
     shutil.copyfile(peer, cpp)
     cpp.chmod(0o755)
     python = prefix / 'peer.py'
@@ -43,7 +43,8 @@ def relocated(tmp_path):
            'PYTHONPATH': ':'.join([str(prefix / python_dir), *system_python]),
            'AMENT_PREFIX_PATH': str(prefix) + ':/opt/ros/humble',
            'HERMOS_BRIDGE_MODE': 'off', 'HERMOS_NO_DISCOVERY_AGENT': '1'}
-    commands = [{'argv': ['/usr/bin/python3', str(python)]}, {'argv': [str(cpp)]}]
+    commands = [{'argv': ['/usr/bin/python3', str(python)]},
+                {'package': 'hermos_runtime', 'argv': ['registration_peer']}]
     return prefix, env, commands
 
 

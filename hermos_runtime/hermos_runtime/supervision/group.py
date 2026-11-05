@@ -38,6 +38,53 @@ def validate(commands, startup_timeout, stop_timeout):
         raise ValueError('commands must contain nonempty argv lists and string environments')
     if any(not math.isfinite(value) or value <= 0 for value in (startup_timeout, stop_timeout)):
         raise ValueError('timeouts must be positive and finite')
+    for command in commands:
+        if command.keys() - {'argv', 'env', 'package', 'id', 'role'}:
+            raise ValueError('unknown command fields')
+        if 'id' in command and (not isinstance(command['id'], str) or
+                               not re.fullmatch(r'[A-Za-z0-9_-]+', command['id'])):
+            raise ValueError('peer id must use letters, digits, _ or -')
+        if 'role' in command and command['role'] not in ('cpu', 'gpu', 'metadata'):
+            raise ValueError('peer role must be cpu, gpu or metadata')
+        if 'package' in command and (
+                not isinstance(command['package'], str) or
+                not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*', command['package']) or
+                command['argv'][0] in ('.', '..') or '/' in command['argv'][0]):
+            raise ValueError('package commands require a package name and an executable basename')
+    if len({command.get('id', str(index)) for index, command in enumerate(commands)}) != len(commands):
+        raise ValueError('peer IDs must be unique within a group')
+
+
+def validate_config(config, startup_timeout, stop_timeout):
+    """Accept legacy unversioned CLI configs as v1; reject unknown schemas."""
+    if (not isinstance(config, dict) or config.keys() - {'version', 'commands'} or
+            type(config.get('version', 1)) is not int or config.get('version', 1) != 1):
+        raise ValueError('expected a version 1 commands configuration')
+    validate(config.get('commands'), startup_timeout, stop_timeout)
+
+
+def command_argv(command):
+    """Resolve an installed direct executable in the unprivileged worker.
+
+    Raw argv commands retain their existing meaning. Package commands never
+    invoke ros2 run or a shell: the registered PID must be the direct child.
+    """
+    argv = list(command['argv'])
+    if 'package' in command:
+        package = command['package']
+        environment = {**os.environ, **command.get('env', {})}
+        # The isolated -E worker has no ament Python dependencies. Search the
+        # resource index using this peer's overlay without mutating os.environ.
+        prefix = next((Path(path) for path in environment.get('AMENT_PREFIX_PATH', '').split(os.pathsep)
+                       if path and (Path(path) / 'share/ament_index/resource_index/packages' /
+                                    package).is_file()), None)
+        if prefix is None:
+            raise ValueError('installed peer package not found: ' + package)
+        executable = prefix / 'lib' / package / argv[0]
+        if not executable.is_file() or not os.access(executable, os.X_OK):
+            raise ValueError('installed peer executable is missing or not executable: ' + str(executable))
+        argv[0] = str(executable)
+    return argv
 
 
 def _resource(path, pid):
@@ -113,7 +160,8 @@ class Group:
         self._evidence['epochs'].append(self._epoch)
         self._save()
         try:
-            for index, command in enumerate(self.commands):
+            resolved = [command_argv(command) for command in self.commands]
+            for index, (command, argv) in enumerate(zip(self.commands, resolved)):
                 manifest = self.epoch_dir / f'peer-{index}.json'
                 ack = self.epoch_dir / f'peer-{index}.ack'
                 env = os.environ.copy()
@@ -125,12 +173,13 @@ class Group:
                 stderr = (self.epoch_dir / f'peer-{index}.stderr').open('w')
                 self._streams.append(stderr)
                 parent_pid = os.getpid()
-                child = subprocess.Popen(command['argv'], env=env, stdin=subprocess.PIPE,
+                child = subprocess.Popen(argv, env=env, stdin=subprocess.PIPE,
                                          stdout=stdout, stderr=stderr, text=True,
                                          preexec_fn=lambda: _die_with_parent(parent_pid))
                 self.processes.append(child)
                 self._pidfds.append(None)
-                entry = {'pid': child.pid, 'argv': command['argv'], 'manifest': str(manifest)}
+                entry = {'pid': child.pid, 'argv': argv, 'manifest': str(manifest),
+                         'id': command.get('id', str(index)), 'role': command.get('role')}
                 self._epoch['peers'].append(entry)
                 try:
                     self._pidfds[-1] = os.pidfd_open(child.pid)
