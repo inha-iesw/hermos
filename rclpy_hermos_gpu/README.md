@@ -205,8 +205,10 @@ ctest --test-dir build/hermos/gpu-test/rclpy_hermos_gpu --output-on-failure
 ```
 
 The default run skips actual-device integration. Device runs must use a **new
-absolute stage**, the canonical session runner, `G4_RUN_DEVICE=1`, and the recovery
-and integration directories on `PYTHONPATH`. See the tests under `test/integration`:
+absolute stage**, the canonical session runner, `G4_RUN_DEVICE=1`, and the integration
+directory on `PYTHONPATH` (provided by CTest). Select a fresh verified bundle with
+`RCLPY_HERMOS_DEVICE_BUNDLE`; its `lib/` supplies the peer hook and library.
+See the tests under `test/integration`:
 native stream/alias/generation cases, public Python/C++ transport, DDS topic and
 parameter traffic under both RMWs, and terminal poison/FD-stall failure control.
 Their oracles check peer exit codes as well as verified teardown; worker exit 0

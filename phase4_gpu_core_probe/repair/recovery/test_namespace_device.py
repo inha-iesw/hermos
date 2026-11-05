@@ -125,7 +125,8 @@ class NamespacePair(Pair):
     """Reuse the native protocol oracle with a namespace worker as sole wait owner."""
 
     def __init__(self, start, fault=None, blocks=1):
-        hook = Path(__file__).resolve().parents[3] / 'build/hermos/device-arm64/lib'
+        hook = Path(os.environ.get('RCLPY_HERMOS_DEVICE_BUNDLE',
+            Path(__file__).resolve().parents[3] / 'build/hermos/device-arm64')) / 'lib'
         env = dict(HERMOS_DEVICE_PATH='/dev/hermos_rclpy', HERMOS_BRIDGE_MODE='off',
                    HERMOS_NO_DISCOVERY_AGENT='1',
                    LD_PRELOAD=str(hook / 'libhermos_heaphook.so'),

@@ -20,7 +20,8 @@ pytestmark = pytest.mark.skipif(
 class Pair:
     def __init__(self, stage, blocks, fault=None):
         binary = os.environ['G3_TRANSPORT_PEER']
-        hook = Path(__file__).resolve().parents[3] / 'build/hermos/device-arm64/lib'
+        hook = Path(os.environ.get('RCLPY_HERMOS_DEVICE_BUNDLE',
+            Path(__file__).resolve().parents[3] / 'build/hermos/device-arm64')) / 'lib'
         env = dict(HERMOS_DEVICE_PATH='/dev/hermos_rclpy', HERMOS_BRIDGE_MODE='off',
                    HERMOS_NO_DISCOVERY_AGENT='1',
                    LD_PRELOAD=str(hook / 'libhermos_heaphook.so'),

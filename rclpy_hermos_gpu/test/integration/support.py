@@ -44,7 +44,8 @@ def successful(record):
 
 
 def environment():
-    library = ROOT / 'build/hermos/device-arm64/lib'
+    library = Path(os.environ.get('RCLPY_HERMOS_DEVICE_BUNDLE',
+                                  ROOT / 'build/hermos/device-arm64')) / 'lib'
     return dict(HERMOS_DEVICE_PATH='/dev/hermos_rclpy', HERMOS_BRIDGE_MODE='off',
                 HERMOS_NO_DISCOVERY_AGENT='1',
                 LD_PRELOAD=str(library / 'libhermos_heaphook.so'),
