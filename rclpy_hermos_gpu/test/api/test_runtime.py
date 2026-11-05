@@ -57,6 +57,51 @@ def test_partial_registration_configuration_rejects_before_manifest(runtime, mon
     assert not manifest.exists()
 
 
+def test_registration_validation_failure_can_be_corrected_before_publication(runtime, monkeypatch, tmp_path):
+    manifest, ack = tmp_path / 'peer.json', tmp_path / 'ack'
+    monkeypatch.setenv('G3_RECOVERY_MANIFEST', str(manifest))
+    runtime.initialise()
+    with pytest.raises(RuntimeError, match='together'):
+        runtime.register()
+    monkeypatch.setenv('G3_RECOVERY_ACK', str(ack))
+    monkeypatch.setattr(runtime_module.time, 'sleep', lambda _: ack.touch())
+    runtime.register()
+    assert runtime.registered
+
+
+def test_inventory_failure_prevents_registration_retry_and_dispatch(runtime, monkeypatch, tmp_path):
+    monkeypatch.setenv('G3_RECOVERY_MANIFEST', str(tmp_path / 'peer.json'))
+    monkeypatch.setenv('G3_RECOVERY_ACK', str(tmp_path / 'ack'))
+    runtime.initialise()
+
+    def fail_inventory():
+        raise RuntimeError('inventory unavailable')
+
+    monkeypatch.setattr(runtime._native, 'owned_ipc_paths', fail_inventory)
+    with pytest.raises(RuntimeError, match='inventory unavailable'):
+        runtime.register()
+    with pytest.raises(RuntimeError, match='already registered'):
+        runtime.register()
+    with pytest.raises(RuntimeError, match='register before'):
+        runtime._check_admission()
+    assert not any(tmp_path.iterdir())
+
+
+def test_registration_timeout_keeps_runtime_unregistered_and_forbids_retry(runtime, monkeypatch, tmp_path):
+    manifest = tmp_path / 'peer.json'
+    monkeypatch.setenv('G3_RECOVERY_MANIFEST', str(manifest))
+    monkeypatch.setenv('G3_RECOVERY_ACK', str(tmp_path / 'ack'))
+    monkeypatch.setenv('G3_RECOVERY_START_TIMEOUT', '1')
+    moments = iter((10, 11))
+    monkeypatch.setattr(runtime_module.time, 'monotonic', lambda: next(moments))
+    runtime.initialise()
+    with pytest.raises(RuntimeError, match='ACK timed out'):
+        runtime.register()
+    assert manifest.exists() and not runtime.registered
+    with pytest.raises(RuntimeError, match='already registered'):
+        runtime.register()
+
+
 def test_endpoint_close_is_attempted_before_runtime_drain_completion(registered_runtime):
     events = registered_runtime._native.events
 

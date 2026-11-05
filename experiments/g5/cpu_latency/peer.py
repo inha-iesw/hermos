@@ -3,7 +3,6 @@
 import argparse
 from array import array
 import json
-import math
 import os
 from pathlib import Path
 import select
@@ -63,30 +62,10 @@ def snapshot(*, network=False, detailed=True):
 
 
 def register():
-    """Require the GPU runtime's registration handshake for a benchmark-only empty inventory.
+    """Register the benchmark's empty inventory before dispatch begins."""
+    from hermos_runtime.supervision.registration import Registration
 
-    Keep path/timeout semantics aligned with rclpy_hermos_gpu.runtime.register.
-    This is not a standalone or general ROS CPU launcher.
-    """
-    manifest = Path(os.environ['G3_RECOVERY_MANIFEST'])
-    ack = Path(os.environ['G3_RECOVERY_ACK'])
-    temporary = Path(str(manifest) + '.tmp')
-    if not manifest.is_absolute() or not ack.is_absolute():
-        raise RuntimeError('registration paths must be absolute')
-    if manifest.exists() or temporary.exists() or ack.exists():
-        raise RuntimeError('registration needs a new epoch')
-    timeout = float(os.environ.get('G3_RECOVERY_START_TIMEOUT', '10'))
-    if not math.isfinite(timeout) or timeout <= 0:
-        raise ValueError('recovery startup timeout must be finite and positive')
-    with temporary.open('x') as output:
-        json.dump(dict(version=1, pid=os.getpid(), resources=[]), output)
-        output.write('\n')
-    temporary.replace(manifest)
-    deadline = time.monotonic() + timeout
-    while not ack.exists():
-        if time.monotonic() >= deadline:
-            raise TimeoutError('registration acknowledgement')
-        time.sleep(0.005)
+    Registration.from_environment(required=True).wait([])
 
 
 def warmup_snapshot_due(report, sequence, warmup):

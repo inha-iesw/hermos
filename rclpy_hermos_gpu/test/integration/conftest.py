@@ -6,7 +6,7 @@ import tempfile
 
 import pytest
 
-from isolated import IsolatedEpoch
+from hermos_runtime.supervision.isolated import IsolatedEpoch
 from support import inventory
 
 

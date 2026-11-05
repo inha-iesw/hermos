@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from group import Group
+from hermos_runtime.supervision.group import Group
 
 
 pytestmark = pytest.mark.skipif(

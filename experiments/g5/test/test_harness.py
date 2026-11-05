@@ -138,7 +138,8 @@ def test_epoch_saves_every_report_before_teardown(tmp_path, monkeypatch, peers):
             assert saved == list(range(self.peers))
             return teardown(self.peers)
 
-    monkeypatch.setitem(sys.modules, 'isolated', SimpleNamespace(IsolatedEpoch=Epoch))
+    monkeypatch.setitem(sys.modules, 'hermos_runtime.supervision.isolated',
+                        SimpleNamespace(IsolatedEpoch=Epoch))
     monkeypatch.setattr('experiments.g5.harness.time.sleep', lambda _: None)
     execute_epoch([{} for _ in range(peers)], tmp_path,
                   expected=2, period_ns=10000000, startup_timeout=30)

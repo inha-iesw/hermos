@@ -17,5 +17,6 @@
   <test_depend>rclpy_hermos_gpu_msgs</test_depend>
   <test_depend>rclpy_hermos_gpu</test_depend>
   <test_depend>hermoslib</test_depend>
+  <test_depend>hermos_runtime</test_depend>
   <export><build_type>ament_cmake</build_type></export>
 </package>

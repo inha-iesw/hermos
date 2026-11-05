@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from isolated import trusted_bootstrap
+from hermos_runtime.supervision.isolated import trusted_bootstrap
 
 from analyze import analyze
 from support import inventory

@@ -210,13 +210,15 @@ CMAKE_BUILD_PARALLEL_LEVEL=2 colcon --log-base log/hermos/g3/repair/probe-build 
 python3 phase4_gpu_core_probe/repair/session/run_device.py \
   "$PWD/log/hermos/g3/repair-device-session" env G3_RUN_TRANSPORT=1 \
   ctest --test-dir build/hermos/repair-probe/phase4_gpu_core_probe \
-  -R '^(test_peer_recovery|test_isolated_epoch|test_namespace_worker|test_namespace_device)$' \
+  -R '^test_namespace_device$' \
   --output-on-failure --no-tests=error
 ```
 
 This selects the namespace acceptance suite. Omitting `-R` runs the full diagnostic
 suite, including earlier unisolated cases that can leave host `cuda.shm.*` residue
-on the tested driver. The operational entry point is `recovery/run.py`; its
+on the tested driver. Host ownership/bootstrap regressions now run in
+`hermos_runtime`'s `test_supervision` target through `scripts/verify`.
+The installed entry is `ros2 run hermos_runtime hermos_supervisor`; its
 command manifest and restart options are documented in the
 [recovery guide](recovery/README.md).
 

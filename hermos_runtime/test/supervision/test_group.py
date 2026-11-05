@@ -1,6 +1,5 @@
 """Owned-process recovery without CUDA, kernel modules or real IPC objects."""
 
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -13,11 +12,9 @@ from types import SimpleNamespace
 import pytest
 
 
-SOURCE = Path(__file__).with_name('group.py')
-RUNNER = Path(__file__).with_name('run.py')
-spec = importlib.util.spec_from_file_location('gpu_peer_recovery', SOURCE)
-recovery = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(recovery)
+from hermos_runtime.supervision import group as recovery
+from hermos_runtime.supervision import run as cli_module
+
 HOST_POPEN = subprocess.Popen
 
 
@@ -320,10 +317,7 @@ def test_pidfd_open_failure_kills_unreaped_child_and_prevents_restart(
 
 
 def run_isolated_cli(monkeypatch, tmp_path, outcomes, *, requested_signal=None):
-    monkeypatch.setitem(sys.modules, 'group', recovery)
-    cli_spec = importlib.util.spec_from_file_location('recovery_cli', RUNNER)
-    cli = importlib.util.module_from_spec(cli_spec)
-    cli_spec.loader.exec_module(cli)
+    cli = cli_module
     config = tmp_path / 'config.json'
     config.write_text(json.dumps({'commands': [{'argv': ['unused-peer']}]}))
     stage = tmp_path / 'cli-stage'
@@ -353,7 +347,7 @@ def run_isolated_cli(monkeypatch, tmp_path, outcomes, *, requested_signal=None):
 
     monkeypatch.setattr(cli, 'IsolatedEpoch', Epoch)
     monkeypatch.setattr(cli.signal, 'signal', lambda number, handler: handlers.update({number: handler}))
-    monkeypatch.setattr(sys, 'argv', [str(RUNNER), str(config), '--stage', str(stage),
+    monkeypatch.setattr(sys, 'argv', ['hermos_supervisor', str(config), '--stage', str(stage),
                                      '--startup-timeout', '2', '--stop-timeout', '0.2'])
     code = cli.main()
     return code, json.loads((stage / 'cli.json').read_text()), epochs

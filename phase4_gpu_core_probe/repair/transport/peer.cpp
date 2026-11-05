@@ -19,7 +19,7 @@
 
 #include "descriptor.hpp"
 #include "checksum.hpp"
-#include "../recovery/registration.hpp"
+#include "hermos_runtime/supervision/registration.hpp"
 #include "../test/support.hpp"
 #ifdef G3_CLEANUP_INJECTION
 #include "ros2_cuda_ipc_core/buffer_metadata/buffer_ref.hpp"
@@ -74,7 +74,7 @@ int publisher(const std::string & topic, std::size_t blocks)
   Manager manager({blocks, 64, 0});
   if (!manager.initialise()) {throw std::runtime_error("GPU pool initialisation failed");}
   g3_test::Stream stream;
-  g3_recovery::register_peer(manager.owned_ipc_paths());
+  hermos_runtime::supervision::register_peer(manager.owned_ipc_paths());
   std::cout << "READY publisher " << getpid() << std::endl;
   std::string command;
   while (std::getline(std::cin, command)) {
@@ -162,7 +162,7 @@ int subscriber(const std::string & topic, std::size_t limit)
   bool cached_valid = false;
   bool gated = false;
   bool warmed = false;
-  g3_recovery::register_peer({});
+  hermos_runtime::supervision::register_peer({});
   std::cout << "READY subscriber " << getpid() << std::endl;
   std::string command;
   try {

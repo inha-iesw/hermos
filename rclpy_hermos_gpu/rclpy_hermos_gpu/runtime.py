@@ -1,12 +1,11 @@
 """One explicitly initialized and registered GPU epoch per process."""
 
 import importlib
-import json
 import math
-import os
-from pathlib import Path
 from threading import RLock
 import time
+
+from hermos_runtime.supervision.registration import Registration
 
 
 _active_runtime = None
@@ -114,32 +113,14 @@ class GpuRuntime:
                 raise RuntimeError('GPU epoch was already registered or registration failed')
             if self._closing:
                 raise RuntimeError('GPU runtime is closing')
-            manifest = os.environ.get('G3_RECOVERY_MANIFEST')
-            ack = os.environ.get('G3_RECOVERY_ACK')
-            if bool(manifest) != bool(ack):
-                raise RuntimeError('recovery manifest and ACK must be supplied together')
-            if manifest is not None:
-                manifest, ack = Path(manifest), Path(ack)
-                temporary = Path(str(manifest) + '.tmp')
-                if not manifest.is_absolute() or not ack.is_absolute():
-                    raise RuntimeError('recovery registration paths must be absolute')
-                if manifest.exists() or temporary.exists() or ack.exists():
-                    raise RuntimeError('recovery registration must use a new epoch')
-                timeout = float(os.environ.get('G3_RECOVERY_START_TIMEOUT', '10'))
-                if not math.isfinite(timeout) or timeout <= 0:
-                    raise ValueError('recovery startup timeout must be finite and positive')
+            registration = Registration.from_environment()
             self._registration_started = True
-            if manifest is not None:
+            if registration is not None:
                 inventory = self._native.owned_ipc_paths()
-                with temporary.open('x', encoding='utf-8') as output:
-                    json.dump({'version': 1, 'pid': os.getpid(), 'resources': inventory}, output)
-                    output.write('\n')
-                temporary.replace(manifest)
-                deadline = time.monotonic() + timeout
-                while not ack.exists():
-                    if time.monotonic() >= deadline:
-                        raise RuntimeError('recovery registration ACK timed out')
-                    time.sleep(0.005)
+                try:
+                    registration.wait(inventory)
+                except TimeoutError as error:
+                    raise RuntimeError('recovery registration ACK timed out') from error
             self._registered = True
 
     def _check_admission(self):

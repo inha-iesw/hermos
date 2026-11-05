@@ -88,7 +88,7 @@ def execute_epoch(commands, path, *, expected, period_ns, startup_timeout):
     control path runs outside measurement: discovery, start, bounded drain, save,
     then supervisor teardown. All peer reports are saved before any peer exits.
     """
-    from isolated import IsolatedEpoch
+    from hermos_runtime.supervision.isolated import IsolatedEpoch
     peers = len(commands)
     epoch = IsolatedEpoch(commands, path / 'epoch',
                           startup_timeout=startup_timeout, stop_timeout=5)

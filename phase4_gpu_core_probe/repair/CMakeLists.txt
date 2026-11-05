@@ -79,6 +79,7 @@ find_package(rclpy_hermos_gpu_msgs REQUIRED)
 find_package(rclpy_hermos_gpu REQUIRED)
 include_directories(${rclpy_hermos_gpu_INCLUDE_DIRS})
 find_package(hermoslib REQUIRED)
+find_package(hermos_runtime REQUIRED)
 find_package(rclcpp REQUIRED)
 
 ament_add_gtest(test_gpu_descriptor test/test_descriptor.cpp TIMEOUT 10)
@@ -95,7 +96,7 @@ foreach(_peer g3_transport_peer g3_cleanup_peer)
   target_link_libraries(${_peer}
     ros2_cuda_ipc_core::ros2_cuda_ipc_core CUDA::cudart
     ${rclpy_hermos_gpu_msgs_TARGETS})
-  ament_target_dependencies(${_peer} hermoslib rclcpp)
+  ament_target_dependencies(${_peer} hermoslib hermos_runtime rclcpp)
 endforeach()
 
 target_compile_definitions(g3_cleanup_peer PRIVATE G3_CLEANUP_INJECTION)

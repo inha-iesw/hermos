@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import isolated
+from hermos_runtime.supervision import isolated
 
 
 @pytest.fixture(autouse=True)
@@ -112,6 +112,7 @@ def simulated_epoch(monkeypatch, tmp_path):
     monkeypatch.setattr(os, 'getgroups', lambda: [1000, 44])
     monkeypatch.setattr(os, 'environ', {'INHERITED': 'preserved', **isolated.REQUIRED_ENVIRONMENT})
     monkeypatch.setattr(isolated, 'trusted_bootstrap', lambda: str(isolated.BOOTSTRAP))
+    monkeypatch.setattr(isolated, 'installed_prefix', lambda: tmp_path / 'prefix')
     monkeypatch.setattr(os, 'statvfs', lambda path: SimpleNamespace(f_blocks=2, f_frsize=4096))
     monkeypatch.setattr(Path, 'read_text', contents)
     monkeypatch.setattr(subprocess, 'Popen', launch)
@@ -288,6 +289,7 @@ def test_bootstrap_rejects_caller_writable_or_symlinked_installation(
 
 
 def test_bootstrap_rejects_installed_source_drift(monkeypatch):
+    monkeypatch.setattr(isolated, 'installed_prefix', lambda: Path('/installed'))
     monkeypatch.setattr(Path, 'lstat', lambda path: SimpleNamespace(
         st_uid=0, st_mode=(stat.S_IFREG | 0o644) if path == isolated.BOOTSTRAP
         else (stat.S_IFDIR | 0o755)))

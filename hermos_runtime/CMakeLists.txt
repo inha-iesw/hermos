@@ -9,6 +9,14 @@ find_package(rclpy_hermos REQUIRED)
 
 ament_python_install_package(${PROJECT_NAME})
 ament_get_python_install_dir(python_install_dir)
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/supervision.json"
+  CONTENT "{\"version\": 1, \"python_dir\": \"${python_install_dir}\"}\n")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/supervision.json" DESTINATION share/${PROJECT_NAME})
+install(FILES scripts/namespace_worker.py DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS scripts/hermos_supervisor scripts/hermos_cpu_peer
+  DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY include/ DESTINATION include)
+ament_export_include_directories(include)
 get_filename_component(backend_prefix "${hermoslib_DIR}/../../.." ABSOLUTE)
 get_filename_component(native_prefix "${rclpy_hermos_DIR}/../../.." ABSOLUTE)
 
@@ -31,8 +39,14 @@ install(DIRECTORY packaging/system/ DESTINATION share/${PROJECT_NAME}/system)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
+  add_executable(supervision_registration_peer test/supervision/registration_peer.cpp)
+  target_compile_features(supervision_registration_peer PRIVATE cxx_std_17)
+  target_include_directories(supervision_registration_peer PRIVATE include)
   ament_add_pytest_test(test_cpu_install_manifest test/environment TIMEOUT 60)
   ament_add_pytest_test(test_cpu_bootstrap test/cpu TIMEOUT 60)
   ament_add_pytest_test(test_kernel_install_contract test/kernel TIMEOUT 60)
+  ament_add_pytest_test(test_supervision test/supervision TIMEOUT 120
+    ENV "HERMOS_RUNTIME_TEST_PREFIX=${CMAKE_INSTALL_PREFIX}"
+        "HERMOS_REGISTRATION_PEER=$<TARGET_FILE:supervision_registration_peer>")
 endif()
 ament_package(CONFIG_EXTRAS cmake/hermos_runtime-extras.cmake)

@@ -48,7 +48,7 @@ def identity():
         if not artifact.is_file():
             raise RuntimeError(f'missing GPU production artifact: {artifact}')
     value['source_sha256'].update(hash_sources((
-        'rclpy_hermos_gpu', 'rclpy_hermos_gpu_msgs',
+        'rclpy_hermos_gpu', 'rclpy_hermos_gpu_msgs', 'hermos_runtime',
         'phase4_gpu_core_probe/repair/recovery', 'phase4_gpu_core_probe/repair/session',
         'build/g3/repaired/ros2_cuda_ipc/ros2_cuda_ipc_core',
         'build/g3/repaired/ros2_cuda_ipc/ros2_cuda_ipc_msgs')))

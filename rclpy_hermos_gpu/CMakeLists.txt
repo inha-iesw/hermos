@@ -46,7 +46,7 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_gpu_launch test/runtime/test_launch.py TIMEOUT 30)
   ament_add_pytest_test(test_gpu_async_shutdown test/runtime/test_async_shutdown.py TIMEOUT 30)
   ament_add_pytest_test(test_gpu_integration test/integration TIMEOUT 300
-    APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/../phase4_gpu_core_probe/repair/recovery:${CMAKE_CURRENT_SOURCE_DIR}/test/integration")
+    APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test/integration")
   set_tests_properties(test_gpu_integration PROPERTIES LABELS "cuda;requires_kernel_module")
 endif()
 ament_package()

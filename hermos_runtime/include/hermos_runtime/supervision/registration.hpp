@@ -11,7 +11,7 @@
 #include <vector>
 #include <unistd.h>
 
-namespace g3_recovery
+namespace hermos_runtime::supervision
 {
 /**
  * @brief Register a complete initialised peer epoch before dispatch starts.
@@ -59,4 +59,4 @@ inline void register_peer(const std::vector<std::string> & paths)
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
 }
-}  // namespace g3_recovery
+}  // namespace hermos_runtime::supervision

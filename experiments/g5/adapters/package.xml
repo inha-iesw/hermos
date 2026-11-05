@@ -11,5 +11,6 @@
   <depend>rclpy_hermos</depend>
   <depend>g5_benchmark_msgs</depend>
   <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>hermos_runtime</test_depend>
   <export><build_type>ament_cmake</build_type></export>
 </package>

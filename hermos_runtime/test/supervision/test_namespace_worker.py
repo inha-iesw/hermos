@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import namespace_worker as worker
+from hermos_runtime.supervision import namespace_worker as worker
 
 
 @pytest.fixture(autouse=True)

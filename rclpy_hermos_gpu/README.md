@@ -141,13 +141,21 @@ python3 -m rclpy_hermos_gpu.launch \
   application:factory application-arguments
 ```
 
-The supervisor remains source-tree-only under `phase4_gpu_core_probe/repair/recovery`;
-it is not installed by this package. The current supported setup requires this
-workspace and its verified device artifacts. Before the first release deployable
-without the source tree, the supervisor/protocol package boundary must be decided
-and revalidated. The privileged bootstrap stays at its root-owned system path;
-a caller-writable colcon install cannot replace that entry point. CPU-only
-registered launchers and general ROS launch remain separate work.
+The supervisor and Python/C++ registration protocol are installed by
+`hermos_runtime`. After sourcing the installation, run
+`ros2 run hermos_runtime hermos_supervisor peers.json --stage /absolute/new-stage`.
+The worker discovers its installed Python package after permanent privilege drop,
+without a development `PYTHONPATH`. The privileged bootstrap stays at its
+root-owned system path; a caller-writable colcon install cannot replace it.
+Peer commands still need an explicitly prepared artifact/environment combination.
+`HermosPeerGroup` and automatic GPU launch configuration remain future work.
+
+CPU peers participating in a GPU group can use the installed
+`lib/hermos_runtime/hermos_cpu_peer module:factory` entry. Its factory accepts
+`(context, arguments)` and returns Node(s) using that context. It creates endpoints
+without spinning or publishing; the launcher registers an empty inventory and
+waits for ACK before dispatch. The group supplies the peer environment before
+process startup. Independent CPU apps continue to use the CPU execution wrapper.
 
 `factory(runtime, arguments)` creates and returns one rclpy Node or a sequence of
 Nodes. Construct Nodes with `context=runtime.ros_context`. The launcher initializes
@@ -165,7 +173,7 @@ subject to the supervisor's KILL failure boundary.
 All GPU holders and HERMOS peers must belong to that registered group. Set
 `HERMOS_BRIDGE_MODE=off` and `HERMOS_NO_DISCOVERY_AGENT=1` in every peer. Use the
 verified heaphook/library/device environment for typed HERMOS endpoints; put
-`LD_PRELOAD` on the peers, never on the supervisor. General `ros2 run/launch`,
+`LD_PRELOAD` on the peers, never on the supervisor. General GPU app `ros2 run/launch`,
 unregistered stock HERMOS peers and adoption of an old stage remain unsupported.
 DDS-only outside peers may exchange ordinary DDS data. Cyclone DDS uses its default
 transport. Fast DDS defaults work within one private epoch, but the tested default

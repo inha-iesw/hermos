@@ -142,7 +142,8 @@ def test_epoch_saves_all_reports_or_preserves_failure_teardown(tmp_path, monkeyp
                 assert saved == [0, 1, 2]
             return teardown_evidence(3)
 
-    monkeypatch.setitem(sys.modules, 'isolated', SimpleNamespace(IsolatedEpoch=Epoch))
+    monkeypatch.setitem(sys.modules, 'hermos_runtime.supervision.isolated',
+                        SimpleNamespace(IsolatedEpoch=Epoch))
     monkeypatch.setattr(epoch.time, 'sleep', lambda _: None)
     if publication_count == 2:
         epoch.execute_fanout([{}, {}, {}], tmp_path, expected=2, period_ns=1)

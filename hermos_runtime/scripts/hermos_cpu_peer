@@ -1,0 +1,6 @@
+#!/usr/bin/python3
+"""Run one CPU factory after the group has prepared its peer environment."""
+
+from hermos_runtime.cpu.registered import main
+
+raise SystemExit(main())

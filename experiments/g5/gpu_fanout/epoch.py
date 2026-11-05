@@ -43,7 +43,7 @@ def drain_subscribers(events, indices, expected, *, timeout=5):
 
 def execute_fanout(commands, path, *, expected, period_ns, startup_timeout=150):
     """Save every report before stopping peers, retaining teardown even on error."""
-    from isolated import IsolatedEpoch
+    from hermos_runtime.supervision.isolated import IsolatedEpoch
 
     peers = len(commands)
     if peers < 2:

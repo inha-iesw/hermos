@@ -8,12 +8,18 @@ import stat
 import subprocess
 import time
 
-from group import RecoveryError, validate
-from control import write_pipe
+from .group import RecoveryError, validate
+from .control import write_pipe
 
 
 BOOTSTRAP = Path('/usr/local/libexec/rclpy-zc-gpu/namespace-bootstrap.py')
 REQUIRED_ENVIRONMENT = {'HERMOS_BRIDGE_MODE': 'off', 'HERMOS_NO_DISCOVERY_AGENT': '1'}
+
+
+def installed_prefix():
+    """Locate runtime resources through the active ROS installation."""
+    from ament_index_python.packages import get_package_prefix
+    return Path(get_package_prefix('hermos_runtime'))
 
 
 def trusted_bootstrap():
@@ -23,7 +29,8 @@ def trusted_bootstrap():
         expected_type = stat.S_ISREG if path == BOOTSTRAP else stat.S_ISDIR
         if info.st_uid != 0 or info.st_mode & 0o022 or not expected_type(info.st_mode):
             raise RecoveryError('bootstrap and its ancestors must be root-owned and not writable: ' + str(path))
-    if BOOTSTRAP.read_bytes() != Path(__file__).with_name('bootstrap.py').read_bytes():
+    source = installed_prefix() / 'share/hermos_runtime/system/namespace-bootstrap.py'
+    if BOOTSTRAP.read_bytes() != source.read_bytes():
         raise RecoveryError('installed bootstrap differs from this source; administrator must update it')
     return str(BOOTSTRAP)
 
@@ -87,7 +94,7 @@ class IsolatedEpoch:
         try:
             self.process = subprocess.Popen(
                 ['sudo', '-n', '/usr/bin/python3', '-I', '-B', bootstrap,
-                 str(Path(__file__).with_name('namespace_worker.py').resolve()), str(self.stage)],
+                 str(installed_prefix() / 'lib/hermos_runtime/namespace_worker.py'), str(self.stage)],
                 stdin=subprocess.PIPE, stdout=self._streams[0], stderr=self._streams[1],
                 text=True, cwd='/', env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin',
                                 'PYTHONDONTWRITEBYTECODE': '1'})

@@ -12,7 +12,7 @@ The review corrections passed the §36 host and device/OS verification on Thor.
 That evidence covers the restricted registered-peer contract below, not general
 ROS launch, the future Python GPU runtime, or every deferred review proposal.
 
-`run.py` supervises a complete GPU peer group in a **fresh IPC/mount namespace and
+The installed `hermos_runtime` supervisor manages a complete GPU peer group in a **fresh IPC/mount namespace and
 private `/dev/shm` for every epoch**. A fixed, administrator-installed bootstrap
 makes mount propagation private, mounts tmpfs and enables child subreaping.
 It permanently drops to the sudo caller's UID/GID, obtains supplementary groups
@@ -25,15 +25,15 @@ groups or the tmpfs size. The PID namespace is unchanged.
 The privileged entry point is exactly
 `/usr/local/libexec/rclpy-zc-gpu/namespace-bootstrap.py`. It and every ancestor
 directory must be root-owned, not group/other-writable, and not symlinks.
-The supervisor also requires its bytes to match the reviewed `bootstrap.py`
-source. An administrator must review and install an updated helper when that
+The supervisor also requires its bytes to match the installed
+`share/hermos_runtime/system/namespace-bootstrap.py` reference. An administrator must review and install an updated helper when that
 source changes; a caller cannot substitute a checkout path as the privileged
 entry point. From this workspace, the administrator installation commands are:
 
 ```bash
 sudo install -d -o root -g root -m 0755 /usr/local/libexec/rclpy-zc-gpu
 sudo install -o root -g root -m 0644 \
-  phase4_gpu_core_probe/repair/recovery/bootstrap.py \
+  "$(ros2 pkg prefix hermos_runtime)/share/hermos_runtime/system/namespace-bootstrap.py" \
   /usr/local/libexec/rclpy-zc-gpu/namespace-bootstrap.py
 ```
 
@@ -49,10 +49,11 @@ Do not grant a generic Python command or a caller-writable checkout script.
 The privileged process starts from `/`, uses Python isolated mode `-I`, imports
 only the system standard library, and does not read caller request JSON or
 write caller paths. It accepts absolute worker/stage paths but reaches the
-checkout worker only through `exec` after the permanent privilege drop.
+installed worker only through `exec` after the permanent privilege drop.
 The system interpreter, its libraries and account database are administrator
-trust boundaries. This installation step does not install a general ROS launcher
-or turn the probe package into a production GPU runtime.
+trust boundaries. The unprivileged entry finds its package from its installation
+prefix using `supervision.json`, including under `-E` and a PATH-only environment.
+This installation step does not configure arbitrary ROS apps for GPU sharing.
 
 ## Supported peer group
 
@@ -74,7 +75,8 @@ signal is not inherited by forked unlink daemons; they are never killed by this
 policy and must exit naturally.
 
 The supported commands are direct executables implementing the registration
-protocol, currently the probe peers. `ros2 run`, `ros2 launch`, stock nodes and
+protocol, including the GPU factory launcher and registered CPU factory entry.
+Nested `ros2 run`, `ros2 launch`, stock nodes and
 G1/G2 peers without that protocol are not supported launch forms. Every peer's
 effective environment must contain `HERMOS_BRIDGE_MODE=off` and
 `HERMOS_NO_DISCOVERY_AGENT=1`; `IsolatedEpoch` rejects missing or different
@@ -116,10 +118,17 @@ operational entry point is the isolated CLI or `IsolatedEpoch` below.
 ```
 
 ```bash
-python3 phase4_gpu_core_probe/repair/recovery/run.py peers.json \
+ros2 run hermos_runtime hermos_supervisor peers.json \
   --stage /absolute/new-recovery-stage --startup-timeout 10 \
   --stop-timeout 5 --max-restarts 1
 ```
+
+The old `recovery/run.py` delegates to this installed implementation. Direct
+Python consumers import `hermos_runtime.supervision.isolated.IsolatedEpoch`.
+C++ peers include `hermos_runtime/supervision/registration.hpp`, declare their
+package dependency on `hermos_runtime`, and call
+`hermos_runtime::supervision::register_peer` before dispatch. The supervisor
+imports no native adapter, CUDA or Torch runtime.
 
 ## Registration, termination and evidence
 
@@ -214,13 +223,14 @@ Its actual Tensor/async shutdown and inside/outside-epoch DDS tests are recorded
 [G4 EVIDENCE](../../../rclpy_hermos_gpu/EVIDENCE.md). Fast DDS across separate shm
 mounts needs the explicitly selected profile documented there.
 
-This supervisor remains source-tree-only. Its installable package boundary must
-be decided and revalidated before a release that runs without this source tree.
-General resource-free launchers and ROS launch remain unsupported. The narrow
-[G5 CPU benchmark](../../../experiments/g5/cpu_latency/README.md) creates endpoints,
-atomically registers an empty GPU inventory, waits for ACK before dispatch, and
-closes its executor/Node/context before exit. This benchmark-only direct peer is
-not a general CPU launcher; the supervisor registration contract is unchanged.
+The supervisor and protocol now belong to the installed `hermos_runtime` package.
+Its `hermos_cpu_peer module:factory` entry creates CPU endpoints, registers an
+empty inventory, waits for ACK before dispatch, and closes its executor, Nodes
+and context on exit. Factories accept `(context, arguments)` and return Node(s).
+The [G5 CPU benchmark](../../../experiments/g5/cpu_latency/README.md) also uses the
+shared registration client while retaining its benchmark-specific dispatch loop.
+General GPU ROS launch integration and automatic peer environment setup remain
+separate work; installation alone does not convert arbitrary applications.
 The root-owned bootstrap must not move into a caller-writable colcon install.
 
 Runtime IPC events leave driver-owned objects on the tested CUDA combination;

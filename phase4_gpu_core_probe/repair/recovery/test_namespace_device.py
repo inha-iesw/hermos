@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from isolated import IsolatedEpoch
+from hermos_runtime.supervision.isolated import IsolatedEpoch
 from test_device import Pair
 
 

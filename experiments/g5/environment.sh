@@ -6,4 +6,4 @@ unset RMW_FASTRTPS_USE_QOS_FROM_XML RMW_FASTRTPS_PUBLICATION_MODE
 export SKIP_DEFAULT_XML=1 PYTHONDONTWRITEBYTECODE=1
 source /opt/ros/humble/setup.bash
 source install/hermos/g5/production/local_setup.bash
-export PYTHONPATH="$PWD:$PWD/phase4_gpu_core_probe/repair/recovery:${PYTHONPATH:-}"
+export PYTHONPATH="$PWD:${PYTHONPATH:-}"

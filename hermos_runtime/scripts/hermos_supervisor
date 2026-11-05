@@ -1,0 +1,6 @@
+#!/usr/bin/python3
+"""Run the installed direct-peer supervisor."""
+
+from hermos_runtime.supervision.run import main
+
+raise SystemExit(main())

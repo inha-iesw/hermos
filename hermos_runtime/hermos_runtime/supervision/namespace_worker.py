@@ -11,8 +11,8 @@ import signal
 import sys
 import time
 
-from group import Group
-from control import JsonInput, write_pipe
+from .group import Group
+from .control import JsonInput, write_pipe
 
 
 def save(path, value):

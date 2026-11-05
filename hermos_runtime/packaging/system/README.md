@@ -1,4 +1,4 @@
-# CPU 관리자 설치 계약
+# HERM0S 관리자 설치 계약
 
 이 디렉터리는 설치할 **설정 원본**이다. colcon 설치는 이를 시스템에 적용하거나
 module을 적재하지 않는다. 공개 apt 패키지가 아니며, DKMS·udev·부팅 관리자가 있는
@@ -45,3 +45,13 @@ CPU wrapper에는 sudo·module 적재 권한이 필요하지 않다.
 
 현재 컨테이너의 unit/build 시험은 실제 DKMS 설치, 다른 커널로의 부팅, udev 적용,
 재부팅 후 적재를 대신하지 않는다. 배포된 커널·사용자 권한 조합별로 이 검증이 필요하다.
+
+## GPU namespace bootstrap
+
+`namespace-bootstrap.py`는 별도로 검토·설치할 관리자 원본이다. 운영 경로는
+`/usr/local/libexec/rclpy-zc-gpu/namespace-bootstrap.py`이며 파일과 모든 상위 경로는
+root 소유이고 일반 사용자가 수정할 수 없어야 한다. colcon은 이 경로를 변경하지 않는다.
+설치 supervisor가 이 원본과 운영 파일의 bytes를 비교한 뒤 고정 경로만 호출한다.
+bootstrap은 표준 라이브러리만 사용하고, UID/GID·capability를 영구히 낮춘 뒤
+설치된 비특권 worker를 실행한다. 최소 sudo 규칙과 설치 절차는
+[recovery 운영 계약](../../../phase4_gpu_core_probe/repair/recovery/README.md#administrator-installation)을 따른다.

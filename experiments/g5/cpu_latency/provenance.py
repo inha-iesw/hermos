@@ -86,7 +86,7 @@ def capture():
         raise RuntimeError('instrumented heaphook symbols')
     if digest(hook) != digest(ROOT / 'build/hermos/g5/heaphook/release/libhermos_heaphook.so'):
         raise RuntimeError('heaphook install differs from feature-checked artifact')
-    sources = hash_sources(('experiments/g5', 'rclpy_zc', 'rclpy_hermos_codegen',
+    sources = hash_sources(('experiments/g5', 'rclpy_zc', 'rclpy_hermos_codegen', 'hermos_runtime',
                             'phase4_gpu_core_probe/repair/recovery',
                             'phase4_gpu_core_probe/repair/session',
                             'hermos/hermos_heaphook', 'hermos/src/hermoslib'))

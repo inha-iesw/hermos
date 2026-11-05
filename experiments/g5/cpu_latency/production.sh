@@ -7,9 +7,9 @@ unset AMENT_PREFIX_PATH CMAKE_PREFIX_PATH COLCON_PREFIX_PATH PYTHONPATH LD_LIBRA
 export PYTHONDONTWRITEBYTECODE=1 CMAKE_BUILD_PARALLEL_LEVEL=2
 source /opt/ros/humble/setup.bash
 colcon --log-base log/hermos/g5/production-build build --executor sequential \
-  --base-paths hermos rclpy_zc rclpy_zc_msgs rclpy_hermos_codegen \
+  --base-paths hermos rclpy_zc rclpy_zc_msgs rclpy_hermos_codegen hermos_runtime \
     experiments/g5/messages experiments/g5/adapters \
-  --packages-up-to g5_benchmark_adapters \
+  --packages-up-to g5_benchmark_adapters hermos_runtime \
   --build-base build/hermos/g5/production --install-base install/hermos/g5/production \
   --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DPython3_EXECUTABLE=/usr/bin/python3

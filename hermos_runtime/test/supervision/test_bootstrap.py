@@ -12,7 +12,12 @@ from types import SimpleNamespace
 
 import pytest
 
-import bootstrap
+import importlib.util
+
+SOURCE = Path(__file__).resolve().parents[2] / 'packaging/system/namespace-bootstrap.py'
+spec = importlib.util.spec_from_file_location('bootstrap', SOURCE)
+bootstrap = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(bootstrap)
 
 
 @pytest.fixture(autouse=True)
