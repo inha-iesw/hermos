@@ -17,8 +17,10 @@
 현재는 **소스 빌드와 관리자 실행 환경 준비가 필요한 개발 단계**입니다. CPU 앱에는
 설치 wrapper와 `HermosNode` launch action을 제공합니다. 실장치 근거는 Thor의
 Ubuntu 22.04 / ROS 2 Humble 컨테이너 환경을 중심으로 축적되어 있습니다. 임의의 ROS 2
-배포판·GPU 조합이나 일반 GPU `ros2 launch` 배포를 지원하는 것은 아닙니다.
-GPU 전송은 같은 supervisor에 등록된 별도 프로세스끼리 사용하는 구성을 기준으로 합니다.
+배포판·GPU 조합 전체의 배포 수용을 의미하지 않습니다.
+GPU 전송은 같은 supervisor에 등록된 별도 프로세스끼리 사용하며,
+[`HermosPeerGroup`](../../rclpy_hermos_gpu/README.md#registered-groups-in-ros-launch)이
+ROS launch에서 환경 구성과 그룹 실행·종료를 연결합니다.
 
 ## 필요한 구성 요소
 
@@ -111,5 +113,8 @@ CPU 패키지 → repaired CUDA core와 메시지 패키지 → `rclpy_hermos_gp
 PyTorch는 사용하는 CUDA/장치에 맞게 별도로 준비해야 합니다.
 
 GPU 실행에는 현재 소스와 일치하는 device bundle/manifest, 관리자 설치 bootstrap,
-private-epoch supervisor가 필요합니다. [GPU 실행 계약](../../phase4_gpu_core_probe/repair/recovery/README.md)을
+private-epoch supervisor가 필요합니다. [그룹 실행 계약](../../hermos_runtime/README.md)을
 먼저 확인하세요. `source install/...`만으로 이 조건이 충족되지는 않습니다.
+준비 후 `HermosPeerGroup`과 등록 factory/직접 실행 파일을 사용하면 supervisor JSON과
+heaphook 절대경로를 앱 사용자가 직접 작성할 필요가 없습니다. 독립 CPU 실행에는
+기존 `HermosNode`를 사용합니다.

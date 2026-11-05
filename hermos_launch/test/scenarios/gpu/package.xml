@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>hermos_gpu_examples</name>
+  <version>0.1.0</version>
+  <description>Installed finite HERM0S GPU launch and DDS coexistence scenario.</description>
+  <maintainer email="maintainers@example.com">rclpy zerocopy maintainers</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <exec_depend>hermos_launch</exec_depend>
+  <exec_depend>hermos_runtime</exec_depend>
+  <exec_depend>rclpy_hermos</exec_depend>
+  <exec_depend>rclpy_hermos_adapters</exec_depend>
+  <exec_depend>rclpy_hermos_gpu</exec_depend>
+  <exec_depend>rclpy_hermos_gpu_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>rmw_fastrtps_cpp</exec_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>ros2launch</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

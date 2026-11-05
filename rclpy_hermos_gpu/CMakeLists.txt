@@ -12,6 +12,7 @@ find_package(pybind11_vendor REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 
 ament_python_install_package(${PROJECT_NAME})
+install(PROGRAMS scripts/hermos_gpu_peer DESTINATION lib/${PROJECT_NAME})
 rclpy_hermos_generate_adapters(_types TYPES rclpy_hermos_gpu_msgs/msg/GpuTensor)
 
 # Only this module links the static CUDA core: its process registries must be unique.

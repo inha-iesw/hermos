@@ -1,1 +1,1 @@
-"""ROS launch actions for explicitly wrapped HERM0S CPU applications."""
+"""ROS launch actions for wrapped CPU applications and registered peer groups."""

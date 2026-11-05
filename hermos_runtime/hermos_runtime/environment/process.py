@@ -5,6 +5,7 @@ import importlib.machinery
 import os
 from pathlib import Path
 import stat
+import subprocess
 
 from .manifest import InstallationError
 
@@ -63,3 +64,44 @@ def check_python_origin(installation):
         'rclpy_hermos._native', package.submodule_search_locations)
     if native is None or Path(native.origin).resolve() != installation.artifacts['native']:
         raise InstallationError('Python/native prefix mismatch; source only the selected overlay')
+
+
+def check_factory_python_origin(installation, executable, environment):
+    """Check the selected factory entry's Python environment without loading payloads.
+
+    CPU/GPU factory entries use the repository's fixed system-Python shebang.
+    The inspector retains the child's PYTHONPATH/PYTHONHOME/PATH, removes preload,
+    and substitutes the resolved script directory for ``-c``'s cwd search entry.
+    PathFinder inspects the package and native extension without executing either.
+    """
+    try:
+        entry = Path(executable).resolve(strict=True)
+        with entry.open('rb') as stream:
+            if stream.readline().rstrip() != b'#!/usr/bin/python3':
+                raise InstallationError('factory entry must use #!/usr/bin/python3: ' + str(entry))
+    except OSError as error:
+        raise InstallationError('cannot inspect factory entry: ' + str(executable)) from error
+    code = '''
+import sys
+sys.path[0] = sys.argv[1]
+from importlib.machinery import PathFinder
+from pathlib import Path
+package = PathFinder.find_spec('rclpy_hermos')
+if package is None or not package.submodule_search_locations:
+    raise SystemExit('missing Python package rclpy_hermos; source the selected overlay')
+native = PathFinder.find_spec('rclpy_hermos._native', package.submodule_search_locations)
+if native is None or native.origin is None or Path(native.origin).resolve() != Path(sys.argv[2]):
+    raise SystemExit('Python/native prefix mismatch; source only the selected overlay')
+'''
+    inspector_environment = dict(environment)
+    inspector_environment.pop('LD_PRELOAD', None)
+    try:
+        result = subprocess.run(
+            ['/usr/bin/python3', '-c', code, str(entry.parent), str(installation.artifacts['native'])],
+            env=inspector_environment, capture_output=True, text=True, timeout=5, check=False)
+    except subprocess.TimeoutExpired as error:
+        raise InstallationError('factory Python environment check timed out') from error
+    except OSError as error:
+        raise InstallationError('cannot inspect factory Python environment: ' + str(error)) from error
+    if result.returncode:
+        raise InstallationError('cannot inspect factory Python environment: ' + result.stderr.strip())

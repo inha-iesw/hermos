@@ -19,7 +19,7 @@ ctest --test-dir build/hermos/verify/g5_benchmark_adapters --output-on-failure -
 ctest --test-dir build/hermos/verify/hermoslib -R '^test_install_' --output-on-failure --no-tests=error
 ctest --test-dir build/hermos/verify/hermos_runtime --output-on-failure --no-tests=error
 ctest --test-dir build/hermos/verify/hermos_cpu_examples --output-on-failure --no-tests=error
-python3 -m pytest -q -p no:cacheprovider hermos_launch/test/cpu
+python3 -m pytest -q -p no:cacheprovider hermos_launch/test/cpu hermos_launch/test/group
 python3 -m pytest -q -p no:cacheprovider phase4_gpu_core_probe/repair/session/test_runner.py
 if [[ "${G5_VERIFY_GPU_HOST:-0}" == 1 ]]; then
   bash experiments/g5/gpu_latency/verify.sh

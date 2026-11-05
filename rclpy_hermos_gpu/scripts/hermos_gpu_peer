@@ -1,0 +1,6 @@
+#!/usr/bin/python3
+"""Run a GPU factory without adding the caller's working directory to sys.path."""
+
+from rclpy_hermos_gpu.launch import main
+
+raise SystemExit(main())

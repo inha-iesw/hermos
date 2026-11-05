@@ -375,3 +375,31 @@ def test_ros_settings_reach_owned_context_and_factory_receives_only_application_
                             namespace='/camera', topic='/camera/frames', label='한글 parameter')
     assert events == ['initialise', 'factory', 'register', 'poll', 'spin',
                       'runtime-close', 'executor-close']
+
+
+def test_direct_gpu_entry_loads_installed_launcher_and_factory_instead_of_cwd(tmp_path):
+    # Isolate Python's script-vs-module search semantics without constructing CUDA.
+    python_root = tmp_path / 'installed/python'
+    package = python_root / 'rclpy_hermos_gpu'
+    package.mkdir(parents=True)
+    (package / '__init__.py').write_text('')
+    (package / 'launch.py').write_text(
+        'import chosen_factory\n'
+        'def main():\n'
+        '    print(chosen_factory.__file__, flush=True)\n'
+        '    return 0\n')
+    factory = python_root / 'chosen_factory.py'
+    factory.write_text('')
+    cwd = tmp_path / 'application-source'
+    shadow = cwd / 'rclpy_hermos_gpu'
+    shadow.mkdir(parents=True)
+    (shadow / '__init__.py').write_text('raise AssertionError("cwd shadow launcher imported")\n')
+    (cwd / 'chosen_factory.py').write_text('raise AssertionError("cwd shadow factory imported")\n')
+    entry = tmp_path / 'installed/lib/rclpy_hermos_gpu/hermos_gpu_peer'
+    entry.parent.mkdir(parents=True)
+    shutil.copyfile(Path(__file__).resolve().parents[2] / 'scripts/hermos_gpu_peer', entry)
+    environment = dict(PATH='/usr/bin:/bin', PYTHONPATH=str(python_root), PYTHONDONTWRITEBYTECODE='1')
+    result = subprocess.run([sys.executable, str(entry)], cwd=cwd, env=environment,
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == str(factory)

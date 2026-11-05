@@ -1,0 +1,4 @@
+#!/usr/bin/env python3
+from hermos_gpu_examples.pipeline.dds import main
+
+raise SystemExit(main())

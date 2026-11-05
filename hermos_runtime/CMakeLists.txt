@@ -36,6 +36,7 @@ add_custom_target(cpu_install_manifest ALL
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cpu-manifest.json" DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY cmake/ DESTINATION share/${PROJECT_NAME}/cmake)
 install(DIRECTORY packaging/system/ DESTINATION share/${PROJECT_NAME}/system)
+install(FILES README.md DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)

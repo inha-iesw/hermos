@@ -2,11 +2,13 @@
 <package format="3">
   <name>hermos_launch</name>
   <version>0.1.0</version>
-  <description>ROS launch actions for HERM0S CPU applications.</description>
+  <description>ROS launch actions for HERM0S CPU applications and registered peer groups.</description>
   <maintainer email="maintainers@example.com">rclpy zerocopy maintainers</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>hermos_runtime</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>rclpy</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <test_depend>python3-pytest</test_depend>

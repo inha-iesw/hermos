@@ -21,7 +21,7 @@ source install/hermos/verify/local_setup.bash
 ```
 
 이 명령은 CPU 패키지 빌드와 host 검증을 수행합니다. 실제 전송에는 커널 모듈·공유 힙
-실행 환경이 추가로 필요하고, GPU는 별도 빌드와 supervisor 설정이 필요합니다.
+실행 환경이 추가로 필요하고, GPU는 별도 빌드와 관리자 bootstrap 준비가 필요합니다.
 
 ## 개발자 가이드
 
@@ -37,8 +37,10 @@ CPU 앱에는 설치 wrapper와 `HermosNode`를 통한 `ros2 run/launch` 실행�
 [관리자 모듈·장치 준비와 실행 예제](guides/developer/setup.md#설치된-cpu-앱-실행)를 참고하세요.
 현재는 소스 빌드와 실행 환경 준비가 필요한 개발 단계입니다. 실장치 근거는
 Thor의 Ubuntu 22.04 / ROS 2 Humble 컨테이너 환경을 중심으로 축적되어 있습니다.
-GPU는 같은 supervisor에 등록된 별도 프로세스 구성이 기준이며, 일반 GPU `ros2 launch`
-배포나 임의의 플랫폼 조합이 검증된 상태는 아닙니다. DKMS 설치·재부팅 후 동작은
+GPU는 같은 supervisor에 등록된 별도 프로세스 구성이 기준입니다.
+[`HermosPeerGroup`](rclpy_hermos_gpu/README.md#registered-groups-in-ros-launch)으로
+일반 ROS launch 파일에서 그룹 실행·환경 구성·종료를 연결합니다.
+임의의 플랫폼 조합이나 전체 배포 수용이 검증된 상태는 아닙니다. DKMS 설치·재부팅 후 동작은
 배포 호스트에서 별도로 검증해야 합니다.
 
 ## 성능과 검증

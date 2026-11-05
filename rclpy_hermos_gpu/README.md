@@ -13,7 +13,8 @@ The first G4 adapter is implemented and validated on Thor under the documented
 direct-peer/private-namespace contract. Actual CUDA ownership, Python/C++ transport,
 async/crash shutdown, DDS coexistence and a bounded zero-copy trace are recorded in
 [EVIDENCE.md](EVIDENCE.md). Logs and source hashes are under `log/g4/`. Performance,
-physical VRAM accounting, Orin and general ROS launch remain outside this result.
+physical VRAM accounting, Orin and general ROS launch were outside that G4 result.
+The later E2b launch contract is documented [below](#registered-groups-in-ros-launch).
 
 ## Runtime and endpoint contract
 
@@ -132,7 +133,7 @@ cached mappings/events and are not physical VRAM measurements.
 
 ## Direct supervised launcher
 
-Use the existing [private-epoch supervisor](../phase4_gpu_core_probe/repair/recovery/README.md)
+Use the installed [private-epoch supervisor](../hermos_runtime/README.md)
 with a direct command such as:
 
 ```text
@@ -148,7 +149,7 @@ The worker discovers its installed Python package after permanent privilege drop
 without a development `PYTHONPATH`. The privileged bootstrap stays at its
 root-owned system path; a caller-writable colcon install cannot replace it.
 Peer commands still need an explicitly prepared artifact/environment combination.
-`HermosPeerGroup` and automatic GPU launch configuration remain future work.
+The ROS launch action below prepares that environment from the selected installation.
 
 CPU peers participating in a GPU group can use the installed
 `lib/hermos_runtime/hermos_cpu_peer module:factory` entry. Its factory accepts
@@ -162,6 +163,9 @@ Nodes. Construct Nodes with `context=runtime.ros_context`. The launcher initiali
 the GPU runtime before calling the factory, then registers its full inventory
 before starting its single-threaded executor. The factory must not spin or publish.
 The launcher handles TERM/INT and checks terminal poison even without callbacks.
+ROS arguments after the factory are passed to its owned context; the factory receives
+only application arguments. Name, namespace, remaps and parameter YAML therefore use
+the same ROS argument processing as the registered CPU launcher.
 
 The peer shutdown budget is three seconds; the supervisor TERM budget is five.
 A signal-wakeup observer also bounds GIL-releasing native FD calls that do not
@@ -173,7 +177,7 @@ subject to the supervisor's KILL failure boundary.
 All GPU holders and HERMOS peers must belong to that registered group. Set
 `HERMOS_BRIDGE_MODE=off` and `HERMOS_NO_DISCOVERY_AGENT=1` in every peer. Use the
 verified heaphook/library/device environment for typed HERMOS endpoints; put
-`LD_PRELOAD` on the peers, never on the supervisor. General GPU app `ros2 run/launch`,
+`LD_PRELOAD` on the peers, never on the supervisor. Independent GPU `ros2 run`,
 unregistered stock HERMOS peers and adoption of an old stage remain unsupported.
 DDS-only outside peers may exchange ordinary DDS data. Cyclone DDS uses its default
 transport. Fast DDS defaults work within one private epoch, but the tested default
@@ -187,6 +191,15 @@ export FASTRTPS_DEFAULT_PROFILES_FILE="$(ros2 pkg prefix rclpy_hermos_gpu)/share
 This profile selects UDPv4 and disables builtin transports, including SHM. It is
 never enabled as an automatic fallback. GPU descriptors never cross the registered
 group boundary, and the HERMOS bridge remains disabled.
+
+## Registered groups in ROS launch
+
+Use [HermosPeerGroup and HermosPeer](../hermos_launch/README.md) for installed
+CPU/GPU factories, ROS arguments, payload-only environment setup and supervised
+shutdown. The [runtime contract](../hermos_runtime/README.md) defines
+registration/ACK, request and lifecycle schemas, evidence and restart restrictions.
+The installed [GPU pipeline example](../hermos_launch/test/scenarios/gpu/) includes
+two GPU factories, a CPU peer and an outside DDS Node.
 
 ## Build and verification
 
@@ -215,7 +228,11 @@ ctest --test-dir build/hermos/gpu-test/rclpy_hermos_gpu --output-on-failure
 The default run skips actual-device integration. Device runs must use a **new
 absolute stage**, the canonical session runner, `G4_RUN_DEVICE=1`, and the integration
 directory on `PYTHONPATH` (provided by CTest). Select a fresh verified bundle with
-`RCLPY_HERMOS_DEVICE_BUNDLE`; its `lib/` supplies the peer hook and library.
+`RCLPY_HERMOS_DEVICE_BUNDLE`; its `lib/` supplies the direct integration peers' hook
+and library. E2b pipeline tests instead use installed (or copied installed) artifacts:
+the test parent validates the selected installation and compares its hook/library SHA
+to the verified runner bundle before spawning launch. Bundle paths are not passed to
+the source-free child. This guard does not cover every older device-test consumer.
 See the tests under `test/integration`:
 native stream/alias/generation cases, public Python/C++ transport, DDS topic and
 parameter traffic under both RMWs, and terminal poison/FD-stall failure control.

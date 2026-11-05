@@ -1,7 +1,9 @@
 """Device identity and Python-origin failures are diagnosed before app startup."""
 
 import os
+import importlib.machinery
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -60,3 +62,77 @@ def test_rejects_python_package_from_stale_overlay_without_import(monkeypatch, t
     monkeypatch.setattr(process.importlib.machinery.PathFinder, 'find_spec', spec)
     with pytest.raises(InstallationError, match='Python/native prefix mismatch'):
         process.check_python_origin(installed)
+
+
+@pytest.fixture
+def factory_installation(tmp_path):
+    native_name = '_native' + importlib.machinery.EXTENSION_SUFFIXES[0]
+    prefixes = [tmp_path / name for name in ('selected', 'stale')]
+    for prefix in prefixes:
+        package = prefix / 'rclpy_hermos'
+        package.mkdir(parents=True)
+        (package / '__init__.py').write_text('raise AssertionError("payload package imported")\n')
+        # PathFinder must inspect this path without loading its deliberately invalid ELF.
+        (package / native_name).write_text('not a loadable native library\n')
+    script = tmp_path / 'installed/lib/hermos_runtime/hermos_cpu_peer'
+    script.parent.mkdir(parents=True)
+    script.write_text('#!/usr/bin/python3\nraise AssertionError("peer application executed")\n')
+    native = prefixes[0] / 'rclpy_hermos' / native_name
+    installation = Installation(Path('/hook'), Path('/lib'), Path('/dev/hermos_rclpy'),
+                                dict(native=native), {})
+    return installation, script, prefixes
+
+
+def test_factory_origin_uses_child_pythonpath_instead_of_parent(factory_installation, monkeypatch):
+    installation, script, (selected, stale) = factory_installation
+    monkeypatch.syspath_prepend(str(stale))
+    environment = dict(PATH='/different/child/path', PYTHONPATH=str(selected),
+                       LD_PRELOAD='/unused/payload-hook.so')
+    process.check_factory_python_origin(installation, script, environment)
+    assert environment['LD_PRELOAD'] == '/unused/payload-hook.so'
+
+
+def test_factory_origin_rejects_child_stale_overlay_even_when_parent_is_correct(
+        factory_installation, monkeypatch):
+    installation, script, (selected, stale) = factory_installation
+    monkeypatch.syspath_prepend(str(selected))
+    with pytest.raises(InstallationError, match='Python/native prefix mismatch'):
+        process.check_factory_python_origin(installation, script,
+                                            dict(PATH='/usr/bin', PYTHONPATH=str(stale)))
+
+
+def test_factory_origin_uses_resolved_script_directory_and_not_cwd(
+        factory_installation, tmp_path, monkeypatch):
+    installation, script, (selected, stale) = factory_installation
+    monkeypatch.chdir(stale)
+    link = tmp_path / 'entry-link'
+    link.symlink_to(script)
+    process.check_factory_python_origin(installation, link,
+                                        dict(PATH='/usr/bin', PYTHONPATH=str(selected)))
+    # A package beside the real script takes precedence, including through a symlink.
+    (script.parent / 'rclpy_hermos').symlink_to(stale / 'rclpy_hermos', target_is_directory=True)
+    with pytest.raises(InstallationError, match='Python/native prefix mismatch'):
+        process.check_factory_python_origin(installation, link,
+                                            dict(PATH='/usr/bin', PYTHONPATH=str(selected)))
+
+
+def test_factory_origin_honors_child_pythonhome_failure(factory_installation, tmp_path):
+    installation, script, (selected, _) = factory_installation
+    with pytest.raises(InstallationError, match='factory Python environment'):
+        process.check_factory_python_origin(installation, script,
+            dict(PATH='/usr/bin', PYTHONPATH=str(selected), PYTHONHOME=str(tmp_path / 'missing-home')))
+
+
+def test_factory_origin_inspector_has_no_preload_and_times_out(factory_installation, monkeypatch):
+    installation, script, (selected, _) = factory_installation
+    environment = dict(PATH='/selected/bin', PYTHONPATH=str(selected),
+                       PYTHONHOME='/selected/home', LD_PRELOAD='/payload-hook.so')
+
+    def timeout(command, **kwargs):
+        assert kwargs['env'] == {key: value for key, value in environment.items() if key != 'LD_PRELOAD'}
+        assert 0 < kwargs['timeout'] <= 10
+        raise subprocess.TimeoutExpired(command, kwargs['timeout'])
+
+    monkeypatch.setattr(subprocess, 'run', timeout)
+    with pytest.raises(InstallationError, match='timed out'):
+        process.check_factory_python_origin(installation, script, environment)
