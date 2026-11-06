@@ -69,6 +69,8 @@ Each invocation creates a private fresh directory beneath the launch log directo
 owner/worker evidence and `peer-N.stdout`/`peer-N.stderr`. Lifecycle output maps peer
 IDs to these logs and distinguishes supervisor starting, registration-ready and
 stopped/incomplete. Registration-ready does not announce application consumer readiness.
+Every epoch supplies a new `HERMOS_SESSION_ID` to all peers and records it in the
+group's `recovery.json`; inherited or per-peer values cannot reuse an old session.
 Incomplete teardown or unexpected supervisor exit fails the launch. Only the supervisor
 may restart, after confirmed teardown, within `max_restarts`.
 Confirmed process/resource cleanup is separate from successful peer drain: a peer's

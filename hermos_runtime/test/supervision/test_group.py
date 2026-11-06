@@ -7,6 +7,7 @@ import signal
 import stat
 import subprocess
 import sys
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -165,6 +166,27 @@ def test_group_acknowledges_all_peers_and_restarts_the_entire_epoch(tmp_path, ch
     assert len(epochs) == 2
     assert all(item['registered'] and item['confirmed_dead'] and
                item['cleanup'] == 'complete' for item in epochs)
+
+
+def test_session_is_shared_by_peers_and_changes_on_epoch_restart(tmp_path, child_file, monkeypatch):
+    monkeypatch.setenv('HERMOS_SESSION_ID', 'inherited-session')
+    instance = group(tmp_path, child_file, 'healthy', 'healthy')
+    sessions = []
+    try:
+        for _ in range(2):
+            instance.start()
+            current = []
+            for peer in instance.processes:
+                values = Path(f'/proc/{peer.pid}/environ').read_bytes().split(b'\0')
+                current.append(next(value.split(b'=', 1)[1].decode() for value in values
+                                    if value.startswith(b'HERMOS_SESSION_ID=')))
+            assert current[0] == current[1] == evidence(instance)[-1]['session_id']
+            uuid.UUID(current[0])
+            sessions.append(current[0])
+            instance.stop()
+    finally:
+        instance.stop()
+    assert sessions[0] != sessions[1]
 
 
 def test_live_group_cannot_delete_registered_resources(tmp_path, child_file, ipc):

@@ -126,6 +126,11 @@ any peer starts. IDs use letters, digits, `_` or `-` and must be unique; omitted
 IDs are the decimal list index. Optional roles are `cpu`, `gpu`, and `metadata`.
 Raw CLI roles are labels; callers still own preload and registration setup.
 
+Each `Group.start()` generates a fresh `HERMOS_SESSION_ID`, overrides inherited
+and command-specific values for every child, and records it in `recovery.json`.
+The ID describes the epoch, not a resource path or an IPC capability. Endpoint
+names and cumulative counters from different sessions must not be merged.
+
 For example, a registered CPU command can use
 `{"id":"control","role":"cpu","package":"hermos_runtime",
 "argv":["hermos_cpu_peer","my_pkg.control:factory"],"env":{...}}`.

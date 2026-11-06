@@ -10,6 +10,7 @@ import signal
 import stat
 import subprocess
 import time
+import uuid
 
 
 class RecoveryError(RuntimeError):
@@ -156,7 +157,8 @@ class Group:
         self.epoch_dir.mkdir(mode=0o700)
         self.processes, self._pidfds, self._streams, self._resources = [], [], [], []
         self._registered, self._stopped = False, False
-        self._epoch = {'directory': str(self.epoch_dir), 'peers': [], 'registered': False}
+        self._epoch = {'directory': str(self.epoch_dir), 'peers': [], 'registered': False,
+                       'session_id': str(uuid.uuid4())}
         self._evidence['epochs'].append(self._epoch)
         self._save()
         try:
@@ -167,7 +169,8 @@ class Group:
                 env = os.environ.copy()
                 env.update(command.get('env', {}))
                 env.update(G3_RECOVERY_MANIFEST=str(manifest), G3_RECOVERY_ACK=str(ack),
-                           G3_RECOVERY_START_TIMEOUT=str(self.startup_timeout))
+                           G3_RECOVERY_START_TIMEOUT=str(self.startup_timeout),
+                           HERMOS_SESSION_ID=self._epoch['session_id'])
                 stdout = (self.epoch_dir / f'peer-{index}.stdout').open('w')
                 self._streams.append(stdout)
                 stderr = (self.epoch_dir / f'peer-{index}.stderr').open('w')
