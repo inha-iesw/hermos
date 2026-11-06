@@ -124,7 +124,14 @@ basename under the first matching ament prefix's `lib/<package>`; without it,
 `argv` is passed directly to exec. All package executables are resolved before
 any peer starts. IDs use letters, digits, `_` or `-` and must be unique; omitted
 IDs are the decimal list index. Optional roles are `cpu`, `gpu`, and `metadata`.
-Raw CLI roles are labels; callers still own preload and registration setup.
+Callers still own preload and registration setup. Each group permits one
+`metadata` peer per effective ROS domain and rejects duplicates before creating
+its stage or starting children. A peer's `env.ROS_DOMAIN_ID` overrides the
+supervisor environment; unset or empty values mean domain 0. Metadata peers
+require canonical decimal notation in the uint32 range (`0` or a nonzero digit
+followed by decimal digits). Leading zeros such as `07` and `010`, hexadecimal,
+signs, and whitespace are rejected so the native runtime and DDS agree on the
+domain. Different domains may each have a metadata peer in the same group.
 
 Each `Group.start()` generates a fresh `HERMOS_SESSION_ID`, overrides inherited
 and command-specific values for every child, and records it in `recovery.json`.

@@ -513,6 +513,66 @@ def test_unknown_schema_and_invalid_peer_metadata_fail_closed(config):
         recovery.validate_config(config, 1, 1)
 
 
+@pytest.mark.parametrize('inherited, overrides', [
+    (None, [None, None]),
+    ('', [None, '0']),
+    ('7', [None, '7']),
+    ('7', ['0', '']),
+    ('8', ['7', '7']),
+])
+@pytest.mark.parametrize('constructor', ['group', 'isolated'])
+def test_duplicate_metadata_domain_is_rejected_before_stage_creation(
+        monkeypatch, tmp_path, inherited, overrides, constructor):
+    monkeypatch.setattr(os, 'getuid', lambda: 1000)
+    monkeypatch.setattr(os, 'geteuid', lambda: 1000)
+    monkeypatch.delenv('LD_PRELOAD', raising=False)
+    monkeypatch.setenv('HERMOS_BRIDGE_MODE', 'off')
+    monkeypatch.setenv('HERMOS_NO_DISCOVERY_AGENT', '1')
+    if inherited is None:
+        monkeypatch.delenv('ROS_DOMAIN_ID', raising=False)
+    else:
+        monkeypatch.setenv('ROS_DOMAIN_ID', inherited)
+    commands = [dict(id=f'observer-{index}', role='metadata', argv=['observer'],
+                     env={} if domain is None else {'ROS_DOMAIN_ID': domain})
+                for index, domain in enumerate(overrides)]
+    stage = tmp_path / 'rejected-stage'
+    factory = recovery.Group if constructor == 'group' else cli_module.IsolatedEpoch
+    with pytest.raises(ValueError, match='metadata peer.*ROS domain'):
+        factory(commands, stage)
+    assert not stage.exists()
+
+
+@pytest.mark.parametrize('raw', [
+    '00', '07', '010', '0x10', '08', '-1', '+7', ' 7', '7 ', '1_0', str(2 ** 32),
+])
+@pytest.mark.parametrize('inherited', [False, True])
+def test_metadata_domain_requires_canonical_uint32_decimal_before_stage_creation(
+        tmp_path, monkeypatch, raw, inherited):
+    monkeypatch.setenv('ROS_DOMAIN_ID', raw if inherited else '0')
+    command = dict(role='metadata', argv=['observer'],
+                   env={} if inherited else {'ROS_DOMAIN_ID': raw})
+    stage = tmp_path / 'rejected-stage'
+    with pytest.raises(ValueError, match='ROS_DOMAIN_ID.*canonical.*uint32'):
+        recovery.Group([command], stage)
+    assert not stage.exists()
+
+
+@pytest.mark.parametrize('raw', ['0', '7', '10', str(2 ** 32 - 1)])
+def test_metadata_domain_accepts_canonical_uint32_decimal(raw):
+    recovery.validate([dict(role='metadata', argv=['observer'],
+                            env={'ROS_DOMAIN_ID': raw})], 1, 1)
+
+
+def test_metadata_peers_in_distinct_domains_can_share_group(monkeypatch):
+    monkeypatch.setenv('ROS_DOMAIN_ID', '7')
+    commands = [dict(id='inherited', role='metadata', argv=['observer']),
+                dict(id='override', role='metadata', argv=['observer'],
+                     env={'ROS_DOMAIN_ID': '8'}),
+                dict(id='publisher', role='cpu', argv=['publisher']),
+                dict(id='subscriber', role='gpu', argv=['subscriber'])]
+    recovery.validate_config({'commands': commands}, 1, 1)
+
+
 @pytest.mark.parametrize('changed', [
     {'verified_teardown': False}, {'retry_allowed': False}, {'requested_stop': True},
 ])

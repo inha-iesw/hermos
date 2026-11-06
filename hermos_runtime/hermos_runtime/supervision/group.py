@@ -54,6 +54,18 @@ def validate(commands, startup_timeout, stop_timeout):
             raise ValueError('package commands require a package name and an executable basename')
     if len({command.get('id', str(index)) for index, command in enumerate(commands)}) != len(commands):
         raise ValueError('peer IDs must be unique within a group')
+    metadata_domains = set()
+    for command in commands:
+        if command.get('role') != 'metadata':
+            continue
+        raw_domain = command.get('env', {}).get('ROS_DOMAIN_ID', os.environ.get('ROS_DOMAIN_ID')) or '0'
+        # RCL treats leading zeros as octal; the native runtime parses decimal.
+        if not re.fullmatch(r'0|[1-9][0-9]*', raw_domain) or int(raw_domain) > 0xffffffff:
+            raise ValueError('metadata ROS_DOMAIN_ID must be canonical decimal in the uint32 range')
+        domain = int(raw_domain)
+        if domain in metadata_domains:
+            raise ValueError(f'only one metadata peer per ROS domain is allowed in a group: {domain}')
+        metadata_domains.add(domain)
 
 
 def validate_config(config, startup_timeout, stop_timeout):

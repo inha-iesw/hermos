@@ -82,9 +82,11 @@ def test_each_termination_contract_is_checked_independently(host_supervisor, tmp
 
 def test_bad_second_executable_fails_before_creating_supervisor_or_stage(tmp_path):
     peers = [HermosPeer(peer_id='valid', role='metadata', package='hermos_runtime',
-                       executable='hermos_cpu_peer', registered=True),
+                       executable='hermos_cpu_peer', registered=True,
+                       additional_env={'ROS_DOMAIN_ID': '0'}),
              HermosPeer(peer_id='missing', role='metadata', package='hermos_runtime',
-                       executable='not_installed', registered=True)]
+                       executable='not_installed', registered=True,
+                       additional_env={'ROS_DOMAIN_ID': '1'})]
     group = HermosPeerGroup(peers=peers, log_directory=str(tmp_path))
     with pytest.raises(ValueError, match='not_installed'):
         group.execute(LaunchContext())
