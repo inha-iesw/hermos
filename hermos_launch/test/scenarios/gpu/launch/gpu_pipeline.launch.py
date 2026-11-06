@@ -1,4 +1,4 @@
-"""Run three registered CPU/GPU peers alongside an ordinary DDS Node."""
+"""Run registered CPU/GPU peers and metadata observation beside a DDS Node."""
 
 from pathlib import Path
 
@@ -31,6 +31,9 @@ def pipeline(context):
         peer_id='cpu', role='cpu', factory='hermos_gpu_examples.pipeline.peer:cpu_factory',
         arguments=[str(output)], name='cpu_peer', remappings=[('image', 'cpu_frames')],
         providers=['rclpy_hermos_adapters'], **common))
+    peers.append(HermosPeer(
+        peer_id='observer', role='metadata', package='hermos_runtime',
+        executable='hermos_metadata_peer', registered=True, name='metadata_observer', **common))
     return [
         HermosPeerGroup(peers=peers, log_directory=str(output), startup_timeout=30,
                         stop_timeout=5, max_restarts=0, additional_env=environment),

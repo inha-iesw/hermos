@@ -24,6 +24,8 @@ def test_pipeline_package_installs_factory_launch_config_and_dds_entry():
     assert os.access(prefix / 'lib/hermos_gpu_examples/dds_control', os.X_OK)
     gpu_prefix = Path(get_package_prefix('rclpy_hermos_gpu'))
     assert os.access(gpu_prefix / 'lib/rclpy_hermos_gpu/hermos_gpu_peer', os.X_OK)
+    runtime_prefix = Path(get_package_prefix('hermos_runtime'))
+    assert os.access(runtime_prefix / 'lib/hermos_runtime/hermos_metadata_peer', os.X_OK)
     for module in ('peer', 'dds'):
         assert importlib.util.find_spec('hermos_gpu_examples.pipeline.' + module) is not None
 
@@ -56,6 +58,29 @@ def assert_pipeline_proof(directory, relocated_root=None):
     assert records['writer']['outside'] == 'outside DDS ready'
     assert records['outside']['received'] == 'inside DDS ready'
     assert records['outside']['preload'] == ''
+    from hermos_gpu_examples.pipeline.dds import has_expected_gpu_metadata
+
+    observer = json.loads((directory / 'observer.json').read_text())
+    metadata = json.loads((directory / 'metadata.json').read_text())
+    assert len({record['pid'] for record in [*records.values(), observer]}) == 5
+    assert observer['preload'] == ''
+    assert observer['manifest'] == dict(version=1, pid=observer['pid'], resources=[])
+    for namespace in ('ipc', 'mnt'):
+        assert observer[namespace] == records['writer'][namespace]
+    assert not any(name.startswith(('libcuda', 'libtorch', 'libhermos_heaphook')) or name == 'libhermos.so'
+                   for name in observer['mapped_names'])
+    assert metadata['session_id'] == observer['session_id']
+    assert has_expected_gpu_metadata(metadata, writer_pid=records['writer']['pid'],
+        reader_pid=records['reader']['pid'], domain_id=observer['domain_id'],
+        ipc_ns_inode=int(records['writer']['ipc'].split('[')[1][:-1]))
+    bundle = Path(os.environ['RCLPY_HERMOS_KMOD']).resolve().parents[1]
+    artifacts = json.loads((bundle / 'artifacts.json').read_text())['artifacts']
+    expected = artifacts['lib/libhermos_ioctl_wrapper.so']['sha256']
+    assert observer['wrappers'] and set(observer['wrappers'].values()) == {expected}
+    if relocated_root is not None:
+        entry = next(path for path in observer['argv'] if Path(path).name == 'hermos_metadata_peer')
+        for path in [entry, *observer['mapped_libraries']]:
+            assert '/workspace/' not in path and Path(path).is_relative_to(relocated_root), path
     stages = list(directory.glob('hermos-group-*/supervisor'))
     assert len(stages) == 1
     cli = json.loads((stages[0] / 'cli.json').read_text())
@@ -64,7 +89,7 @@ def assert_pipeline_proof(directory, relocated_root=None):
     result = json.loads((stages[0] / 'epoch-0/worker-result.json').read_text())
     owner = json.loads((stages[0] / 'epoch-0/owner.json').read_text())
     assert owner['verified_teardown'] and result['teardown_complete'] and result['echild']
-    assert not result['peer_failed'] and result['returncodes'] == [0, 0, 0]
+    assert not result['peer_failed'] and result['returncodes'] == [0, 0, 0, 0]
 
 
 @pytest.mark.skipif(os.environ.get('G4_RUN_DEVICE') != '1',

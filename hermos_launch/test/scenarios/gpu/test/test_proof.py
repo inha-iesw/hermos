@@ -1,6 +1,7 @@
 """Host oracles for installed artifacts and real pipeline library evidence."""
 
 from contextlib import nullcontext
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -11,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from hermos_gpu_examples.pipeline.peer import node_proof
+from hermos_gpu_examples.pipeline import dds
 from hermos_runtime.environment import InstallationError
 import installation
 import test_installed as device_tests
@@ -156,3 +158,74 @@ def test_library_proof_excludes_shm_but_keeps_workspace_and_native_provider_libr
                            get_parameter=lambda name: SimpleNamespace(value='proof'))
     proof = node_proof(node, 'frames')
     assert proof['mapped_libraries'] == sorted(paths[2:5])
+
+
+def test_dds_control_subscribes_to_shared_metadata_topic(monkeypatch, tmp_path):
+    from unittest.mock import Mock
+
+    import rclpy
+    import rclpy.context
+    import rclpy.executors
+    import rclpy.node
+    from ros2hermos import discovery
+    from ros2hermos_discovery_msgs.msg import HermosDaemonState
+
+    context, node, executor = Mock(), Mock(), Mock()
+    monkeypatch.setattr(rclpy, 'init', Mock())
+    monkeypatch.setattr(rclpy.context, 'Context', Mock(return_value=context))
+    monkeypatch.setattr(rclpy.node, 'Node', Mock(return_value=node))
+    monkeypatch.setattr(rclpy.executors, 'SingleThreadedExecutor', Mock(return_value=executor))
+    monkeypatch.setattr(dds.signal, 'signal', Mock())
+    monkeypatch.setattr(dds.sys, 'argv', ['dds_control', str(tmp_path)])
+    monkeypatch.setattr(discovery, 'GOSSIP_TOPIC', '/shared_metadata_contract')
+    (tmp_path / 'writer.json').touch()
+
+    assert dds.main() == 0
+
+    subscriptions = [call.args for call in node.create_subscription.call_args_list
+                     if call.args[0] is HermosDaemonState]
+    assert len(subscriptions) == 1
+    assert subscriptions[0][1] == discovery.GOSSIP_TOPIC
+    assert callable(subscriptions[0][2])
+    executor.spin_once.assert_not_called()
+
+
+@pytest.fixture
+def gpu_metadata():
+    return dict(schema_version=2, domain_id=41, ipc_ns_inode=123, session_id='epoch', topics=[
+        dict(topic_name='/camera/frames', type_name='rclpy_hermos_gpu_msgs/msg/GpuTensor',
+             domain_id=41,
+             publishers=[dict(pid=10, is_bridge=False, statistics_status='available',
+                              supported_fields=1, published_total=3)],
+             subscribers=[dict(pid=20, is_bridge=False, statistics_status='available',
+                               supported_fields=2, received_total=3)])])
+
+
+def test_metadata_gate_accepts_only_known_native_gpu_descriptor_transfers(gpu_metadata):
+    assert dds.has_expected_gpu_metadata(gpu_metadata, writer_pid=10, reader_pid=20,
+                                        domain_id=41, ipc_ns_inode=123)
+
+
+@pytest.mark.parametrize('damage', [
+    'observer-subscriber', 'wrong-domain', 'wrong-namespace', 'unknown-type',
+    'wrong-pid', 'unsupported-stats', 'incomplete-transfers',
+])
+def test_metadata_gate_rejects_incomplete_or_wrong_scope(gpu_metadata, damage):
+    snapshot = copy.deepcopy(gpu_metadata)
+    topic = snapshot['topics'][0]
+    if damage == 'observer-subscriber':
+        topic['subscribers'].append(dict(topic['subscribers'][0], pid=30))
+    elif damage == 'wrong-domain':
+        snapshot['domain_id'] = 42
+    elif damage == 'wrong-namespace':
+        snapshot['ipc_ns_inode'] = 456
+    elif damage == 'unknown-type':
+        topic['type_name'] = ''
+    elif damage == 'wrong-pid':
+        topic['publishers'][0]['pid'] = 30
+    elif damage == 'unsupported-stats':
+        topic['subscribers'][0]['supported_fields'] = 0
+    elif damage == 'incomplete-transfers':
+        topic['subscribers'][0]['received_total'] = 2
+    assert not dds.has_expected_gpu_metadata(snapshot, writer_pid=10, reader_pid=20,
+                                            domain_id=41, ipc_ns_inode=123)

@@ -16,6 +16,7 @@ PACKAGES = (
     'hermos_runtime', 'rclpy_hermos', 'rclpy_hermos_msgs', 'rclpy_hermos_adapters', 'hermoslib',
     'hermos_cie_config_msgs', 'hermos_cie_thread_configurator', 'rclpy_hermos_gpu',
     'rclpy_hermos_gpu_msgs', 'ros2_cuda_ipc_msgs', 'hermos_launch', 'hermos_gpu_examples',
+    'hermos_ioctl_wrapper', 'ros2hermos_discovery_msgs', 'ros2hermos_discovery_agent', 'ros2hermos',
 )
 
 
