@@ -11,6 +11,7 @@
   <depend>rclpy_hermos</depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>ros2hermos_discovery_agent</exec_depend>
   <exec_depend>binutils</exec_depend>
   <test_depend>ament_cmake_pytest</test_depend>
   <export><build_type>ament_cmake</build_type></export>

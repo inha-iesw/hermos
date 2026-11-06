@@ -13,7 +13,7 @@ file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/supervision.json"
   CONTENT "{\"version\": 1, \"python_dir\": \"${python_install_dir}\"}\n")
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/supervision.json" DESTINATION share/${PROJECT_NAME})
 install(FILES scripts/namespace_worker.py DESTINATION lib/${PROJECT_NAME})
-install(PROGRAMS scripts/hermos_supervisor scripts/hermos_cpu_peer
+install(PROGRAMS scripts/hermos_supervisor scripts/hermos_cpu_peer scripts/hermos_metadata_peer
   DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY include/ DESTINATION include)
 ament_export_include_directories(include)
@@ -49,5 +49,6 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_supervision test/supervision TIMEOUT 120
     ENV "HERMOS_RUNTIME_TEST_PREFIX=${CMAKE_INSTALL_PREFIX}"
         "HERMOS_REGISTRATION_PEER=$<TARGET_FILE:supervision_registration_peer>")
+  ament_add_pytest_test(test_observation test/observation TIMEOUT 240)
 endif()
 ament_package(CONFIG_EXTRAS cmake/hermos_runtime-extras.cmake)

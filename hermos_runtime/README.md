@@ -74,8 +74,9 @@ G1/G2 peers without that protocol are not supported launch forms. Every peer's
 effective environment must contain `HERMOS_BRIDGE_MODE=off` and
 `HERMOS_NO_DISCOVERY_AGENT=1`; `IsolatedEpoch` rejects missing or different
 values before creating a stage. The checked environment includes inherited
-variables plus each command's overrides. Bridge/discovery child lifetimes have
-not been adopted under this contract. DDS coexistence under the tested explicit UDP profile is described in the
+variables plus each command's overrides. The explicit `hermos_metadata_peer`
+entry observes metadata as a registered direct peer; automatic discovery forks
+and payload bridge children remain disabled. DDS coexistence under the tested explicit UDP profile is described in the
 [GPU guide](../rclpy_hermos_gpu/README.md). The HERMOS/GPU restriction is not a DDS transport policy.
 
 `LD_PRELOAD` belongs in each command's `env`, never in the supervisor environment.
@@ -132,6 +133,21 @@ require canonical decimal notation in the uint32 range (`0` or a nonzero digit
 followed by decimal digits). Leading zeros such as `07` and `010`, hexadecimal,
 signs, and whitespace are rejected so the native runtime and DDS agree on the
 domain. Different domains may each have a metadata peer in the same group.
+
+The installed `hermos_metadata_peer` entry reuses the factory runner's context,
+ACK, signal and cleanup contract with the backend observation factory. It
+validates the selected installation/device without loading the payload runtime,
+rejects preload or bridge-enabled environments, and publishes an empty resource
+inventory. Observation does not claim the bridge agent's kernel singleton slot,
+so both processes can run together. The supervisor enforces the metadata-peer
+limit within its group. Snapshot dispatch begins after ACK; a metadata observer
+does not establish business-consumer readiness. The supervisor sets the reserved
+`G3_RECOVERY_ROLE` from each command's role, overriding inherited and per-command
+environment values. `hermos_metadata_peer` requires `role='metadata'`; an omitted
+or different role fails before observer initialization. Direct invocation without
+the supervisor role also fails. For standalone observation, run
+`discovery_agent --observation-only` instead. See
+[observation](../guides/developer/observation.md).
 
 Each `Group.start()` generates a fresh `HERMOS_SESSION_ID`, overrides inherited
 and command-specific values for every child, and records it in `recovery.json`.
@@ -280,9 +296,9 @@ alone does not convert arbitrary applications.
 Package dependencies are `hermos_runtime -> rclpy_hermos -> hermoslib`, with
 `hermos_runtime` also directly depending on `hermoslib`, ament and rclpy. This is
 separate from the supervisor/worker's native-free Python import contract. External
-metadata applications may register an empty inventory, but the backend discovery
-agent is not integrated. E3 must choose an adapter/launcher boundary without adding
-a backend-to-runtime dependency cycle; no register-then-exec API exists yet.
+metadata applications may register an empty inventory. The `hermos_metadata_peer`
+entry integrates the backend observation factory without a backend-to-runtime
+dependency; no register-then-exec API exists yet.
 The `G3_RECOVERY_*` environment names remain the shared protocol for compatibility.
 The root-owned bootstrap must not move into a caller-writable colcon install.
 

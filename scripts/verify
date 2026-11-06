@@ -7,7 +7,7 @@ source /opt/ros/humble/setup.bash
 colcon --log-base log/hermos/verify build --symlink-install \
   --build-base build/hermos/verify --install-base install/hermos/verify \
   --base-paths . hermos_launch/test/scenarios/cpu \
-  --packages-up-to rclpy_hermos_adapters rclpy_hermos_test_adapters g5_benchmark_adapters hermos_cpu_examples \
+  --packages-up-to rclpy_hermos_adapters rclpy_hermos_test_adapters g5_benchmark_adapters hermos_cpu_examples ros2hermos \
   --cmake-args -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
 source install/hermos/verify/local_setup.bash
 ctest --test-dir build/hermos/verify/rclpy_hermos_msgs --output-on-failure --no-tests=error
@@ -17,9 +17,14 @@ ctest --test-dir build/hermos/verify/rclpy_hermos_adapters --output-on-failure -
 ctest --test-dir build/hermos/verify/rclpy_hermos_test_adapters --output-on-failure --no-tests=error
 ctest --test-dir build/hermos/verify/g5_benchmark_adapters --output-on-failure --no-tests=error
 ctest --test-dir build/hermos/verify/hermoslib -R '^test_install_' --output-on-failure --no-tests=error
+GTEST_FILTER='TypeRegistryWriterTest.*' ctest --test-dir build/hermos/verify/hermoslib \
+  -R '^test_unit_hermoslib$' --output-on-failure --no-tests=error
 ctest --test-dir build/hermos/verify/hermos_runtime --output-on-failure --no-tests=error
+ctest --test-dir build/hermos/verify/hermos_ioctl_wrapper --output-on-failure --no-tests=error
 ctest --test-dir build/hermos/verify/hermos_cpu_examples --output-on-failure --no-tests=error
 python3 -m pytest -q -p no:cacheprovider hermos_launch/test/cpu hermos_launch/test/group
+python3 -m pytest -q -p no:cacheprovider hermos/src/ros2hermos/test
+python3 -m pytest -q -p no:cacheprovider hermos/src/ros2hermos_discovery_agent/test
 python3 -m pytest -q -p no:cacheprovider phase4_gpu_core_probe/repair/session/test_runner.py
 if [[ "${G5_VERIFY_GPU_HOST:-0}" == 1 ]]; then
   bash experiments/g5/gpu_latency/verify.sh

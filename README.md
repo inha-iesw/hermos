@@ -32,6 +32,7 @@ source install/hermos/verify/local_setup.bash
 | [CUDA Tensor](guides/developer/gpu-tensors.md) | PyTorch 예제, GPU peer 실행, stream·버퍼 수명 |
 | [사용자 정의 메시지](guides/developer/custom-messages.md) | 메시지 타입별 adapter 생성·연결 |
 | [문제 해결](guides/developer/troubleshooting.md) | preload, QoS, proxy, publish·종료 오류 |
+| [관측과 통계](guides/developer/observation.md) | 등록 metadata observer, domain/session 조회, native counter 의미 |
 
 CPU 앱에는 설치 wrapper와 `HermosNode`를 통한 `ros2 run/launch` 실행을 제공합니다.
 [관리자 모듈·장치 준비와 실행 예제](guides/developer/setup.md#설치된-cpu-앱-실행)를 참고하세요.

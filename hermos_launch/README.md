@@ -39,9 +39,11 @@ registered=True, role='gpu'`. The executable must implement the common registrat
 ACK and teardown contract itself. The namespace worker resolves it directly under
 `lib/<package>` using that peer's selected overlay. This is not a CPU bootstrap wrapper
 or an arbitrary stock ROS executable. Metadata peers use `role='metadata'`, register
-an empty inventory and do not preload the heap hook. This option serves external
-applications implementing that protocol; the backend discovery agent's E3 integration
-is still pending and must avoid a backend-to-runtime dependency cycle. Direct peers
+an empty inventory and do not preload the heap hook. The installed observation
+adapter is `package='hermos_runtime', executable='hermos_metadata_peer', registered=True`.
+It owns a backend metadata Node through the existing registered factory lifecycle;
+the backend does not depend on `hermos_runtime`. See [observation](../guides/developer/observation.md)
+for domain/session selection and native counter meanings. Direct peers
 handle INT/TERM with graceful drain and exit zero on success.
 
 The action validates installed artifacts/device/providers, configures only payload

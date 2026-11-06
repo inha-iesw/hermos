@@ -1,0 +1,6 @@
+#!/usr/bin/python3
+"""Run one metadata observer with supervisor registration and owned cleanup."""
+
+from hermos_runtime.observation.registered import main
+
+raise SystemExit(main())

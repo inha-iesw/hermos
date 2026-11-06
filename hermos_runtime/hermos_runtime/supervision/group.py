@@ -182,6 +182,7 @@ class Group:
                 env.update(command.get('env', {}))
                 env.update(G3_RECOVERY_MANIFEST=str(manifest), G3_RECOVERY_ACK=str(ack),
                            G3_RECOVERY_START_TIMEOUT=str(self.startup_timeout),
+                           G3_RECOVERY_ROLE=command.get('role', ''),
                            HERMOS_SESSION_ID=self._epoch['session_id'])
                 stdout = (self.epoch_dir / f'peer-{index}.stdout').open('w')
                 self._streams.append(stdout)

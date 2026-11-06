@@ -189,6 +189,25 @@ def test_session_is_shared_by_peers_and_changes_on_epoch_restart(tmp_path, child
     assert sessions[0] != sessions[1]
 
 
+@pytest.mark.parametrize('role', [None, 'cpu', 'gpu', 'metadata'])
+def test_supervisor_role_overrides_parent_and_command_environment(
+        tmp_path, child_file, monkeypatch, role):
+    monkeypatch.setenv('G3_RECOVERY_ROLE', 'inherited-role')
+    command = dict(argv=[sys.executable, str(child_file), 'healthy'],
+                   env={'G3_RECOVERY_ROLE': 'command-role', 'ROS_DOMAIN_ID': '0'})
+    if role is not None:
+        command['role'] = role
+    instance = recovery.Group([command], tmp_path / 'stage')
+    try:
+        instance.start()
+        values = Path(f'/proc/{instance.processes[0].pid}/environ').read_bytes().split(b'\0')
+        actual = next(value.split(b'=', 1)[1].decode() for value in values
+                      if value.startswith(b'G3_RECOVERY_ROLE='))
+        assert actual == (role or '')
+    finally:
+        instance.stop()
+
+
 def test_live_group_cannot_delete_registered_resources(tmp_path, child_file, ipc):
     instance = group(tmp_path, child_file, 'resource')
     ipc['group'] = instance

@@ -48,7 +48,7 @@ def relocated(tmp_path):
     return prefix, env, commands
 
 
-@pytest.mark.parametrize('name', ['hermos_supervisor', 'hermos_cpu_peer'])
+@pytest.mark.parametrize('name', ['hermos_supervisor', 'hermos_cpu_peer', 'hermos_metadata_peer'])
 def test_installed_cli_is_directly_executable(relocated, name):
     prefix, env, _ = relocated
     result = subprocess.run([str(prefix / 'lib/hermos_runtime' / name), '--help'],
